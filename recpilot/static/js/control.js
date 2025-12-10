@@ -472,6 +472,17 @@
     return `S${String(safe).padStart(2, "0")}`;
   }
 
+  function extractTakeDisplay(sessionLabel) {
+    if (!sessionLabel) {
+      return "-";
+    }
+    const match = sessionLabel.match(/_S(\d{2})$/i) || sessionLabel.match(/S(\d{1,})$/i);
+    if (match && match[1]) {
+      return `S${String(match[1]).padStart(2, "0")}`;
+    }
+    return sessionLabel;
+  }
+
   function buildSessionLabel(takeNumber) {
     const date = (appState.sessionDate || "").trim();
     const groupLabel = formatGroupLabel(appState.groupId);
@@ -2416,10 +2427,11 @@
     if (!notesTableBody) {
       return;
     }
+    const takeDisplay = extractTakeDisplay(row.session);
     const html = `
       <td class="px-3 py-2 font-mono text-xs text-slate-700">${row.timecode || "--:--:--"}</td>
       <td class="px-3 py-2 text-slate-600">${row.groupId || "-"}</td>
-      <td class="px-3 py-2 text-slate-600">${row.session || "-"}</td>
+      <td class="px-3 py-2 text-slate-600">${takeDisplay || "-"}</td>
       <td class="px-3 py-2 text-slate-700">${row.content || "(内容なし)"}</td>
       <td class="px-3 py-2 text-slate-500">${row.category || ""}</td>
     `;
@@ -2438,12 +2450,13 @@
     if (!notesTableBody) {
       return null;
     }
+    const takeDisplay = note.takeDisplay || extractTakeDisplay(note.session);
     const tr = document.createElement("tr");
     tr.className = "bg-blue-50 last:rounded-b-lg";
     tr.innerHTML = `
       <td class="px-3 py-2 font-mono text-xs text-blue-700">${note.timecode}</td>
       <td class="px-3 py-2 text-slate-600">${note.groupId}</td>
-      <td class="px-3 py-2 text-slate-600">${note.session}</td>
+      <td class="px-3 py-2 text-slate-600">${takeDisplay}</td>
       <td class="px-3 py-2 italic text-slate-500">内容入力待ち...</td>
       <td class="px-3 py-2 text-slate-500">${note.categoryDisplay}</td>
     `;
@@ -2576,6 +2589,7 @@
     const note = {
       groupId: appState.groupId,
       session: appState.session,
+      takeDisplay: extractTakeDisplay(appState.session || buildSessionLabel()),
       categoryDisplay: categoryLabel,
       rawCategory: categoryValue,
       timecode: formatTime(durationSeconds - remainingSeconds),

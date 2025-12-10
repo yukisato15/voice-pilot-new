@@ -486,16 +486,26 @@
     return `S${String(safe).padStart(2, "0")}`;
   }
 
+  function sanitizeDirectorForRoom(name) {
+    const raw = (name || "").trim();
+    if (!raw) return "";
+    // Remove whitespace and symbols; keep letters/numbers (including multibyte).
+    const compact = raw.replace(/\s+/g, "");
+    return compact.replace(/[^\p{L}\p{N}]/gu, "") || compact;
+  }
+
   function buildRoomIdFromState() {
     const groupRaw = (appState.groupId || "").trim();
     const dateRaw = (appState.sessionDate || "").trim();
-    if (!groupRaw || !dateRaw) {
+    const directorRaw = (appState.director || "").trim();
+    if (!groupRaw || !dateRaw || !directorRaw) {
       return "";
     }
     const groupDigits = groupRaw.replace(/\D/g, "");
     const group = groupDigits ? groupDigits.padStart(3, "0") : groupRaw;
     const date = dateRaw.replace(/\D/g, "").slice(0, 8) || dateRaw;
-    return `${group}_${date}`;
+    const director = sanitizeDirectorForRoom(directorRaw);
+    return `${group}_${date}_${director}`;
   }
 
   function getCurrentTakeValue() {

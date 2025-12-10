@@ -28,6 +28,11 @@
   const reactionDisplay = document.getElementById("reaction-display");
   const reactionEmoji = document.getElementById("reaction-emoji");
   const reactionLabel = document.getElementById("reaction-label");
+  const joinForm = document.getElementById("room-join-form");
+  const joinGroup = document.getElementById("room-join-group");
+  const joinDate = document.getElementById("room-join-date");
+  const joinDirector = document.getElementById("room-join-director");
+  const joinStatus = document.getElementById("room-join-status");
 
   const overlayValueBaseClass = overlayValue.className;
   const noticeBaseClass = "rounded-full bg-white/10 px-5 py-2 text-base font-semibold text-white shadow-lg backdrop-blur";
@@ -36,19 +41,72 @@
     "personal-info": "※実名・学校名・地名など、個人を特定できる内容は避けましょう",
   };
 
+  function sanitizeDirectorForRoom(name) {
+    const raw = (name || "").trim();
+    if (!raw) return "";
+    const compact = raw.replace(/\s+/g, "");
+    return compact.replace(/[^\p{L}\p{N}]/gu, "") || compact;
+  }
+
+  function buildRoomId(groupId, sessionDate, director) {
+    const groupRaw = (groupId || "").trim();
+    const dateRaw = (sessionDate || "").trim();
+    const directorRaw = (director || "").trim();
+    if (!groupRaw || !dateRaw || !directorRaw) {
+      return "";
+    }
+    const groupDigits = groupRaw.replace(/\D/g, "");
+    const group = groupDigits ? groupDigits.padStart(3, "0") : groupRaw;
+    const date = dateRaw.replace(/\D/g, "").slice(0, 8) || dateRaw;
+    const directorSlug = sanitizeDirectorForRoom(directorRaw);
+    return `${group}_${date}_${directorSlug}`;
+  }
+
+  function updateJoinStatus(text, ok = false) {
+    if (!joinStatus) return;
+    joinStatus.textContent = text;
+    joinStatus.className = ok ? "text-emerald-300 text-xs font-semibold" : "text-amber-300 text-xs font-semibold";
+  }
+
   function ensureRoomJoin() {
     if (!currentRoomId) {
-      console.warn("roomId が設定されていないため、Socket接続を待機します。?room=xxxx で指定してください。");
+      updateJoinStatus("room未設定: 組番号・セッション日・進行者名を入力してください");
       return;
     }
     if (!socket.connected) {
       socket.connect();
     }
     socket.emit("join_room", { roomId: currentRoomId });
+    updateJoinStatus(`参加中: ${currentRoomId}`, true);
   }
 
   socket.on("connect", ensureRoomJoin);
   ensureRoomJoin();
+  socket.on("room_joined", (payload) => {
+    if (payload?.roomId) {
+      currentRoomId = payload.roomId;
+      updateJoinStatus(`参加中: ${payload.roomId}`, true);
+    }
+  });
+
+  joinForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const groupId = joinGroup?.value || "";
+    const date = joinDate?.value || "";
+    const director = joinDirector?.value || "";
+    const roomId = buildRoomId(groupId, date, director);
+    if (!roomId) {
+      updateJoinStatus("必須項目を入力してください", false);
+      return;
+    }
+    currentRoomId = roomId;
+    try {
+      localStorage.setItem("recpilot-room-id", roomId);
+    } catch (err) {
+      console.warn("roomId の保存に失敗しました", err);
+    }
+    ensureRoomJoin();
+  });
 
   let overlayTimeoutId = null;
   let noticeTimeoutId = null;

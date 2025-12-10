@@ -2949,11 +2949,18 @@
     const cell = rowEl.querySelector(".editable-content");
     if (!cell) return;
     if (activeContentEditor) {
-      activeContentEditor.remove();
+      const parentCell = activeContentEditor.closest(".editable-content");
+      const original = parentCell?.dataset.originalContent || "";
+      if (parentCell) parentCell.innerHTML = original;
       activeContentEditor = null;
     }
+
+    const originalContent = cell.innerHTML;
+    cell.dataset.originalContent = originalContent;
+    cell.innerHTML = "";
+
     const editor = document.createElement("div");
-    editor.className = "mt-2 rounded-lg border border-gh-border bg-gh-bg p-2";
+    editor.className = "rounded-lg border border-gh-border bg-gh-bg p-2 shadow-sm";
     editor.innerHTML = `
       <textarea class="w-full rounded border border-gh-border bg-gh-bg px-2 py-1 text-sm text-gh-text" rows="2">${meta.content || ""}</textarea>
       <div class="mt-2 flex gap-2">
@@ -2966,7 +2973,7 @@
     const cancelBtn = editor.querySelector(".cancel-btn");
 
     const cleanup = () => {
-      editor.remove();
+      cell.innerHTML = cell.dataset.originalContent || "";
       activeContentEditor = null;
     };
 
@@ -2989,7 +2996,7 @@
           throw new Error(data.error || "更新に失敗しました");
         }
         renderNoteRow(data.row, rowEl);
-        cleanup();
+        activeContentEditor = null;
       } catch (error) {
         console.error(error);
         alert("メモの更新に失敗しました。コンソールを確認してください。");

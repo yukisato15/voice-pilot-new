@@ -628,6 +628,68 @@ def load_report_rows() -> List[Dict[str, str]]:
     return rows
 
 
+def update_report_entry(group_id: str, session_label: str, take_label: str, timecode: str, *, content: Optional[str] = None, category: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """
+    指定された行を上書きする（group/session/take/timecode で最初に一致する1行）。
+    content/category のいずれかを更新し、その他の列は保持する。
+    見つからなければ None を返す。
+    """
+    ensure_report_headers()
+    updated_row_dict: Optional[Dict[str, str]] = None
+    rows: List[List[str]] = []
+    updated = False
+
+    if REPORT_CSV.exists():
+        with REPORT_CSV.open("r", encoding="utf-8", newline="") as csvfile:
+            reader = csv.reader(csvfile)
+            header = next(reader, [])
+            for row in reader:
+                if len(row) < 7:
+                    rows.append(row)
+                    continue
+                match = (
+                    row[1].strip() == group_id
+                    and row[2].strip() == session_label
+                    and row[3].strip() == take_label
+                    and normalize_timecode(row[4]) == normalize_timecode(timecode)
+                )
+                if match and not updated:
+                    current = {
+                        "日時": row[0],
+                        "組番号": row[1],
+                        "セッション": row[2],
+                        "テイク": row[3],
+                        "タイムコード": row[4],
+                        "内容": row[5],
+                        "カテゴリ": row[6],
+                    }
+                    if content is not None:
+                        row[5] = content
+                    if category is not None:
+                        row[6] = category
+                    updated_row_dict = {
+                        "timestamp": row[0],
+                        "groupId": row[1],
+                        "session": row[2],
+                        "take": row[3],
+                        "timecode": row[4],
+                        "content": row[5],
+                        "category": row[6],
+                    }
+                    updated = True
+                rows.append(row)
+
+    if not updated:
+        return None
+
+    with REPORT_CSV.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["日時", "組番号", "セッション", "テイク", "タイムコード", "内容", "カテゴリ"])
+        writer.writerows(rows)
+
+    return updated_row_dict
+
+
 def filter_report_rows(group_id: str, session_label: str, take_label: Optional[str] = None) -> List[Dict[str, str]]:
     """
     収録の絞り込み: グループ/セッションで絞り、テイク列が存在する場合はテイクも一致させる。
@@ -781,6 +843,34 @@ def api_report():
             },
         },
     )
+
+
+@app.route("/api/report/update", methods=["POST"])
+def api_report_update():
+    ensure_report_headers()
+    data = request.get_json(silent=True) or {}
+    group_id = (data.get("groupId") or "").strip()
+    session_label = (data.get("session") or "").strip()
+    take_label = (str(data.get("take") or "").strip())
+    timecode = (data.get("timecode") or "").strip()
+    content = data.get("content")
+    category = data.get("category")
+
+    if not group_id or not session_label or not take_label or not timecode:
+        return jsonify({"error": "groupId, session, take, timecode は必須です。"}), 400
+
+    updated = update_report_entry(
+        group_id,
+        session_label,
+        take_label,
+        timecode,
+        content=content if content is not None else None,
+        category=category if category is not None else None,
+    )
+    if not updated:
+        return jsonify({"error": "対象の記録が見つかりませんでした。"}), 404
+
+    return jsonify({"success": True, "row": updated})
 
 
 @socketio.on("send_prompt")

@@ -441,6 +441,7 @@
   let pendingRow = null;
   let contentManuallyShown = false;
   let lastPromptMessage = "";
+  let currentEditableNote = null; // {timecode, take, groupId, session}
   let preRollActive = false;
   let hasStarted = false;
   let completionSequenceStarted = false;
@@ -2652,20 +2653,31 @@
       return;
     }
     const takeDisplay = extractTakeDisplay(row.session, row.take);
+    const contentText = row.content ? row.content : "<span class=\"text-slate-400 italic\">内容入力待ち...</span>";
     const html = `
       <td class="px-3 py-2 font-mono text-xs text-slate-700">${row.timecode || "--:--:--"}</td>
       <td class="px-3 py-2 text-slate-600">${row.groupId || "-"}</td>
       <td class="px-3 py-2 text-slate-600">${takeDisplay || "-"}</td>
-      <td class="px-3 py-2 text-slate-700">${row.content || "(内容なし)"}</td>
+      <td class="px-3 py-2 text-slate-700 editable-content" data-timecode="${row.timecode}" data-take="${row.take}" data-session="${row.session}" data-group="${row.groupId}">
+        ${contentText}
+      </td>
       <td class="px-3 py-2 text-slate-500">${row.category || ""}</td>
     `;
     if (targetRow) {
       targetRow.className = "bg-white last:rounded-b-lg";
       targetRow.innerHTML = html;
+      targetRow.dataset.timecode = row.timecode || "";
+      targetRow.dataset.take = row.take || "";
+      targetRow.dataset.session = row.session || "";
+      targetRow.dataset.group = row.groupId || "";
     } else {
       const tr = document.createElement("tr");
       tr.className = "bg-white last:rounded-b-lg";
       tr.innerHTML = html;
+      tr.dataset.timecode = row.timecode || "";
+      tr.dataset.take = row.take || "";
+      tr.dataset.session = row.session || "";
+      tr.dataset.group = row.groupId || "";
       notesTableBody.prepend(tr);
     }
   }
@@ -2681,7 +2693,7 @@
       <td class="px-3 py-2 font-mono text-xs text-blue-700">${note.timecode}</td>
       <td class="px-3 py-2 text-slate-600">${note.groupId}</td>
       <td class="px-3 py-2 text-slate-600">${takeDisplay}</td>
-      <td class="px-3 py-2 italic text-slate-500">内容入力待ち...</td>
+      <td class="px-3 py-2 italic text-slate-500 editable-content" data-timecode="${note.timecode}" data-take="${note.take}" data-session="${note.session}" data-group="${note.groupId}">内容入力待ち...</td>
       <td class="px-3 py-2 text-slate-500">${note.categoryDisplay}</td>
     `;
     notesTableBody.prepend(tr);
@@ -2776,6 +2788,7 @@
       pendingRow.parentElement.removeChild(pendingRow);
     }
     resetPendingState();
+    currentEditableNote = null;
   }
 
   function handleCaptureNote() {
@@ -2823,56 +2836,107 @@
 
     pendingNote = note;
     pendingRow = createPendingRow(note);
+    currentEditableNote = { timecode: note.timecode, take: note.take, groupId: note.groupId, session: note.session };
     if (noteActionBtn) {
       noteActionBtn.disabled = false;
+      noteActionBtn.textContent = "更新";
     }
     cancelNoteBtn?.classList.remove("hidden");
-    if (contentManuallyShown) {
-      contentWrapper?.classList.remove("hidden");
-      if (toggleContentBtn) {
-        toggleContentBtn.textContent = "詳細メモ欄を隠す";
-      }
-      inputContent.focus();
-    } else if (toggleContentBtn) {
-      toggleContentBtn.textContent = "詳細メモ欄を開く";
+    contentWrapper?.classList.remove("hidden");
+    contentManuallyShown = true;
+    if (toggleContentBtn) {
+      toggleContentBtn.textContent = "詳細メモ欄を隠す";
     }
+    inputContent.focus();
+
+    // すぐに空のメモとして保存（カテゴリのみ）
+    void persistPendingNote("");
   }
 
-  async function submitNote(event) {
-    event.preventDefault();
-
+  async function persistPendingNote(contentText) {
     if (!pendingNote) {
-      alert("先に「タイムコードを記録」を押してください。");
       return;
     }
-
-    const content = inputContent.value.trim();
     const payload = {
       groupId: pendingNote.groupId,
       session: pendingNote.session,
       take: pendingNote.take || getCurrentTakeValue(),
       category: pendingNote.categoryDisplay,
-      content,
+      content: contentText,
       timecode: pendingNote.timecode,
     };
 
+    const response = await fetch("/api/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "保存に失敗しました");
+    }
+    const lastCategory = pendingNote.rawCategory;
+    const lastCustom = pendingNote.rawCategory === "その他" ? pendingNote.categoryDisplay : "";
+    renderNoteRow(data.row, pendingRow);
+    // 保存後も編集対象として保持
+    currentEditableNote = {
+      timecode: data.row.timecode,
+      take: data.row.take,
+      groupId: data.row.groupId,
+      session: data.row.session,
+    };
+    resetPendingState(true, lastCategory, lastCustom);
+    if (noteActionBtn) {
+      noteActionBtn.disabled = false;
+      noteActionBtn.textContent = "更新";
+    }
+    inputContent.value = "";
+  }
+
+  async function submitNote(event) {
+    event.preventDefault();
+
+    const content = inputContent.value.trim();
+    const target = currentEditableNote;
+    if (!target) {
+      alert("先に「タイムコードを記録」を押してください。");
+      return;
+    }
     try {
-      const response = await fetch("/api/report", {
+      const response = await fetch("/api/report/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          groupId: target.groupId,
+          session: target.session,
+          take: target.take,
+          timecode: target.timecode,
+          content,
+        }),
       });
       const data = await response.json();
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "保存に失敗しました");
+        throw new Error(data.error || "更新に失敗しました");
       }
-      const lastCategory = pendingNote.rawCategory;
-      const lastCustom = pendingNote.rawCategory === "その他" ? pendingNote.categoryDisplay : "";
-      renderNoteRow(data.row, pendingRow);
-      resetPendingState(true, lastCategory, lastCustom);
+      const existingRow = Array.from(notesTableBody?.querySelectorAll("tr") || []).find(
+        (tr) =>
+          tr.dataset.timecode === target.timecode &&
+          tr.dataset.take === target.take &&
+          tr.dataset.session === target.session
+      );
+      if (existingRow) {
+        renderNoteRow(data.row, existingRow);
+      } else {
+        renderNoteRow(data.row);
+      }
+      inputContent.value = "";
+      if (noteActionBtn) {
+        noteActionBtn.disabled = true;
+      }
+      currentEditableNote = null;
     } catch (error) {
       console.error(error);
-      alert("メモの保存に失敗しました。コンソールを確認してください。");
+      alert("メモの更新に失敗しました。コンソールを確認してください。");
     }
   }
 
@@ -3732,6 +3796,30 @@
     cancelNoteBtn?.addEventListener("click", cancelPendingNote);
     captureNoteBtn?.addEventListener("click", handleCaptureNote);
     toggleContentBtn?.addEventListener("click", toggleContentArea);
+    notesTableBody?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const cell = target.closest(".editable-content");
+      if (!cell) return;
+      const rowEl = cell.closest("tr");
+      if (!rowEl) return;
+      const timecode = rowEl.dataset.timecode || cell.dataset.timecode || "";
+      const take = rowEl.dataset.take || cell.dataset.take || getCurrentTakeValue();
+      const session = rowEl.dataset.session || cell.dataset.session || appState.session;
+      const group = rowEl.dataset.group || cell.dataset.group || appState.groupId;
+      const currentText = cell.textContent?.trim() || "";
+      const next = window.prompt("内容を入力してください", currentText === "内容入力待ち..." ? "" : currentText);
+      if (next === null) return;
+      inputContent.value = next;
+      contentWrapper?.classList.remove("hidden");
+      contentManuallyShown = true;
+      if (toggleContentBtn) toggleContentBtn.textContent = "詳細メモ欄を隠す";
+      currentEditableNote = { timecode, take, groupId: group, session };
+      if (noteActionBtn) {
+        noteActionBtn.disabled = false;
+        noteActionBtn.textContent = "更新";
+      }
+    });
 
     if (categorySelect) {
       categorySelect.addEventListener("change", () => {

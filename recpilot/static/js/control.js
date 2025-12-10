@@ -77,7 +77,8 @@
   const toggleContentBtn = document.getElementById("toggle-content");
 
   const finishBtn = document.getElementById("finish-btn");
-  const exportSummaryBtn = document.getElementById("export-summary-btn");
+  const finalExportBtn = document.getElementById("final-export-btn");
+  const takeExportAllBtn = document.getElementById("take-export-all-btn");
   const takeExportsContainer = document.getElementById("take-exports");
   const finishModal = document.getElementById("finish-modal");
   const finishForm = document.getElementById("finish-form");
@@ -3696,7 +3697,7 @@
     resetBtn.addEventListener("click", handleResetButton);
     resumeBtn?.addEventListener("click", resumeAfterPause);
     earlyFinishBtn?.addEventListener("click", () => handleEarlyFinish("early_finish_button"));
-    exportSummaryBtn?.addEventListener("click", exportAllTakes);
+    takeExportAllBtn?.addEventListener("click", exportAllTakes);
     takeExportsContainer?.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -3758,7 +3759,7 @@
     finishBtn?.addEventListener("click", showFinishModal);
     finishCancel?.addEventListener("click", hideFinishModal);
     finishForm?.addEventListener("submit", handleFinishSubmit);
-    exportSummaryBtn?.addEventListener("click", openFinalExportModal);
+    finalExportBtn?.addEventListener("click", openFinalExportModal);
 
     offsetManualForm?.addEventListener("submit", (event) => {
       event.preventDefault();

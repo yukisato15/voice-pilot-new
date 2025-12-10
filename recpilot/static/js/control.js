@@ -101,6 +101,9 @@
   const finalExportSubmitBtn = document.getElementById("final-export-submit");
   const breakBtn = document.getElementById("break-btn");
   const breakCancelBtn = document.getElementById("break-cancel-btn");
+  const pauseActionBar = document.getElementById("pause-action-bar");
+  const resumeBtn = document.getElementById("resume-btn");
+  const earlyFinishBtn = document.getElementById("early-finish-btn");
   const offsetStatusLabel = document.getElementById("offset-status-label");
   const offsetSourceBadge = document.getElementById("offset-source-badge");
   const offsetAutoValue = document.getElementById("offset-auto-value");
@@ -454,6 +457,8 @@
   let breakTimerId = null;
   let breakRemainingSeconds = 0;
   let breakPreviousPrompt = "";
+  let isPaused = false;
+  let skipNextStartIncrement = false;
   const OFFSET_POLLING_INTERVAL_MS = 15000;
 
   function formatGroupLabel(rawGroupId) {
@@ -505,8 +510,55 @@
     appState.session = buildSessionLabel(takeNumber);
   }
 
+  function advanceToNextTake() {
+    sessionCount = Math.max(sessionCount, 0) + 1;
+    skipNextStartIncrement = true;
+    refreshSessionLabel(sessionCount);
+    applyAppState();
+  }
+
+  function resetTimecodeOnly() {
+    clearAllTimeouts();
+    emitOverlay({ mode: "clear" });
+    isRunning = false;
+    isPaused = false;
+    preRollActive = false;
+    completionSequenceStarted = false;
+    clearInterval(timerInterval);
+    stopEncouragementInterval();
+    clearPostNotificationTimeout();
+    remainingSeconds = durationSeconds;
+    milestoneFlags.clear();
+    finalMinuteActive = false;
+    finalThirtySecondActive = false;
+    finalCountdownStarted = false;
+    finalZeroShown = false;
+    lastCountdownSecondShown = null;
+    awaitingSyncConfirmation = false;
+    currentSegmentId = null;
+    clearBreakTimer(true);
+    updateSessionLengthLabel();
+    updateTimerDisplay();
+    setTimerStatus("待機中", "text-slate-500");
+    broadcastTime();
+    hidePauseActionBar();
+    hasStarted = false;
+  }
+
   function getBreakDurationSeconds() {
     return Math.max(1, settings.breakDurationMinutes || 5) * 60;
+  }
+
+  function showPauseActionBar() {
+    if (pauseActionBar) {
+      pauseActionBar.classList.remove("hidden");
+    }
+  }
+
+  function hidePauseActionBar() {
+    if (pauseActionBar) {
+      pauseActionBar.classList.add("hidden");
+    }
   }
 
   function updateSummary() {
@@ -2165,13 +2217,19 @@
       clearBreakTimer(true);
 
       // セッションカウントを増やす
-      sessionCount++;
+      if (skipNextStartIncrement) {
+        skipNextStartIncrement = false;
+      } else {
+        sessionCount++;
+      }
       refreshSessionLabel(sessionCount);
       applyAppState();
     }
     isRunning = true;
+    isPaused = false;
     hasStarted = true;
     completionSequenceStarted = false;
+    hidePauseActionBar();
     setTimerStatus("カウントダウン中", "text-emerald-600");
     updateTimerDisplay();
     timerInterval = setInterval(tick, 1000);
@@ -2219,6 +2277,7 @@
       return;
     }
     isRunning = false;
+    isPaused = true;
     clearInterval(timerInterval);
     stopEncouragementInterval();
     clearPostNotificationTimeout();
@@ -2226,6 +2285,7 @@
     clearAllTimeouts();
     emitOverlay({ mode: "clear" });
     broadcastTime();
+    showPauseActionBar();
   }
 
   function resetTimer() {
@@ -2233,6 +2293,7 @@
     emitOverlay({ mode: "clear" });
     preRollActive = false;
     isRunning = false;
+    isPaused = false;
     hasStarted = false;
     completionSequenceStarted = false;
     milestoneFlags.clear();
@@ -2258,6 +2319,36 @@
     awaitingSyncConfirmation = false;
     currentSegmentId = null;
     clearBreakTimer(true);
+    hidePauseActionBar();
+  }
+
+  function resumeAfterPause() {
+    if (!isPaused) {
+      return;
+    }
+    isPaused = false;
+    hidePauseActionBar();
+    setTimerStatus("カウントダウン中", "text-emerald-600");
+    timerInterval = setInterval(tick, 1000);
+    broadcastTime();
+  }
+
+  function handleEarlyFinish(reason = "early_finish") {
+    // reason is informational only for future logging
+    resetTimecodeOnly();
+    advanceToNextTake();
+  }
+
+  function handleResetButton() {
+    const currentTakeValue = Number(getCurrentTakeValue());
+    const nextTakeLabel = formatTakeLabel(currentTakeValue + 1);
+    const shouldAdvance = window.confirm(`リセットします。収録カウントを次のテイク (${nextTakeLabel}) に進めますか？`);
+    resetTimecodeOnly();
+    if (shouldAdvance) {
+      advanceToNextTake();
+    } else {
+      skipNextStartIncrement = true; // 次の開始でテイクを据え置き
+    }
   }
 
   function sendPrompt(message) {
@@ -2759,6 +2850,7 @@
           emitOverlay({ mode: "clear" });
           sendPrompt("お疲れ様でした。声を出して結構です。");
           showStopRecordingModal();
+          handleEarlyFinish("time_up");
         }, elapsed);
       }
     });
@@ -3476,7 +3568,9 @@
 
     startBtn.addEventListener("click", startTimer);
     stopBtn.addEventListener("click", stopTimer);
-    resetBtn.addEventListener("click", resetTimer);
+    resetBtn.addEventListener("click", handleResetButton);
+    resumeBtn?.addEventListener("click", resumeAfterPause);
+    earlyFinishBtn?.addEventListener("click", () => handleEarlyFinish("early_finish_button"));
 
     sendCustomPromptBtn.addEventListener("click", () => {
       sendPrompt(customPromptInput.value);

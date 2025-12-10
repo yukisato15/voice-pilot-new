@@ -1071,27 +1071,35 @@
             </div>
 
             <!-- 任意メッセージ入力 -->
-            <div class="mt-4 flex flex-col gap-2 md:flex-row">
-              <input
-                id="custom-prompt"
-                type="text"
-                placeholder="任意のメッセージを入力..."
-                class="flex-1 rounded-lg border-2 border-gh-border bg-gh-bg px-4 py-3 text-sm font-medium text-gh-text placeholder-gh-textMuted shadow-sm transition-all focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/20"
-              />
-              <button
-                id="send-custom-prompt"
-                type="button"
-                class="rounded-lg bg-gh-blue px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
-              >
-                送信
-              </button>
-              <button
-                id="clear-prompt"
-                type="button"
-                class="rounded-lg border-2 border-gh-border bg-gh-bg px-6 py-3 text-sm font-bold text-gh-text shadow-md transition-all hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
-              >
-                表示クリア
-              </button>
+            <div class="mt-4 rounded-2xl border-2 border-gh-blue/40 bg-gh-bg/60 p-4 shadow-inner">
+              <div class="mb-2 flex items-center gap-2">
+                <span class="rounded-full bg-gh-blue/20 px-3 py-1 text-xs font-bold text-gh-blue">任意メッセージ</span>
+                <span class="text-[11px] font-semibold text-gh-textMuted">その場の指示や補足を即時送信</span>
+              </div>
+              <div class="flex flex-col gap-3 md:flex-row md:items-center">
+                <input
+                  id="custom-prompt"
+                  type="text"
+                  placeholder="任意のメッセージを入力..."
+                  class="flex-1 rounded-xl border-2 border-gh-blue/40 bg-gh-bg px-4 py-3 text-base font-medium text-gh-text placeholder-gh-textMuted shadow-sm transition-all focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/40"
+                />
+                <div class="flex gap-2">
+                  <button
+                    id="send-custom-prompt"
+                    type="button"
+                    class="rounded-lg bg-gh-blue px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+                  >
+                    送信
+                  </button>
+                  <button
+                    id="clear-prompt"
+                    type="button"
+                    class="rounded-lg border-2 border-gh-border bg-gh-bg px-6 py-3 text-sm font-bold text-gh-text shadow-md transition-all hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+                  >
+                    表示クリア
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- 画面注目ボタン -->

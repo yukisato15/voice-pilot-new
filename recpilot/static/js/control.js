@@ -2592,6 +2592,19 @@
         };
       });
 
+      // 先頭に「自分で記入」テーマを追加
+      const customTheme = {
+        id: "custom_manual",
+        no: "自分で記入",
+        category: "自分で記入",
+        title: "自由入力のテーマ",
+        baseHints: ["ここに自由に入力してください。"],
+        extraHint1: [],
+        extraHint2: [],
+        marks: [],
+      };
+      allThemes.unshift(customTheme);
+
       themeById = new Map();
       themesByCategory = new Map();
       categoryOrder = [];

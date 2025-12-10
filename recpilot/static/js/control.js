@@ -183,7 +183,8 @@
   const saveAttentionSettingsBtn = document.getElementById("save-attention-settings-btn");
   const resetAttentionSettingsBtn = document.getElementById("reset-attention-settings-btn");
 
-  const socket = io();
+  const socket = io({ autoConnect: false });
+  let currentRoomId = "";
 
   const CATEGORY_GRADIENTS = [
     "from-blue-500 to-cyan-500",
@@ -485,6 +486,18 @@
     return `S${String(safe).padStart(2, "0")}`;
   }
 
+  function buildRoomIdFromState() {
+    const groupRaw = (appState.groupId || "").trim();
+    const dateRaw = (appState.sessionDate || "").trim();
+    if (!groupRaw || !dateRaw) {
+      return "";
+    }
+    const groupDigits = groupRaw.replace(/\D/g, "");
+    const group = groupDigits ? groupDigits.padStart(3, "0") : groupRaw;
+    const date = dateRaw.replace(/\D/g, "").slice(0, 8) || dateRaw;
+    return `${group}_${date}`;
+  }
+
   function getCurrentTakeValue() {
     return String(Math.max(sessionCount || 1, 1));
   }
@@ -518,6 +531,41 @@
     const take = formatTakeLabel(takeNumber ?? Math.max(sessionCount, 1));
     return `${date}_${groupLabel}_${take}`;
   }
+
+  function ensureSocketRoom() {
+    const roomId = buildRoomIdFromState();
+    if (!roomId) {
+      console.warn("roomId 未設定のためソケット送信をスキップします");
+      return null;
+    }
+    if (!socket.connected) {
+      socket.connect();
+    }
+    if (currentRoomId !== roomId) {
+      currentRoomId = roomId;
+      try {
+        localStorage.setItem("recpilot-room-id", roomId);
+      } catch (err) {
+        console.warn("roomId の保存に失敗しました", err);
+      }
+      socket.emit("join_room", { roomId });
+    }
+    return roomId;
+  }
+
+  function emitToRoom(eventName, payload = {}) {
+    const roomId = ensureSocketRoom();
+    if (!roomId) return;
+    socket.emit(eventName, { ...payload, roomId });
+  }
+
+  socket.on("connect", () => {
+    const roomId = buildRoomIdFromState() || currentRoomId;
+    if (roomId) {
+      currentRoomId = roomId;
+      socket.emit("join_room", { roomId });
+    }
+  });
 
   function refreshSessionLabel(takeNumber) {
     appState.session = buildSessionLabel(takeNumber);
@@ -729,7 +777,7 @@
           restorePromptMessage();
         } else {
           lastPromptMessage = "";
-          socket.emit("prompt_update", { message: "" });
+          emitToRoom("clear_prompt", {});
         }
         setTimerStatus("待機中", "text-slate-500");
 
@@ -752,7 +800,7 @@
       restorePromptMessage();
     } else {
       lastPromptMessage = "";
-      socket.emit("prompt_update", { message: "" });
+      emitToRoom("clear_prompt", {});
     }
     setTimerStatus("待機中", "text-slate-500");
 
@@ -2015,6 +2063,7 @@
 
     applyAppState();
     closeThemePopover();
+    ensureSocketRoom();
     if (isNewSession) {
       usedThemeIds.clear();
       themeHistory.length = 0;
@@ -2062,7 +2111,7 @@
       return;
     }
     const theme = getTheme(currentThemeId);
-    socket.emit("theme_update", {
+    emitToRoom("theme_update", {
       title: theme?.title || "",
       category: theme?.category || "",
       hints: resolveHints(theme, activeHintGroup),
@@ -2071,7 +2120,7 @@
   }
 
   function emitOverlay(payload) {
-    socket.emit("prompt_overlay", payload);
+    emitToRoom("prompt_overlay", payload);
   }
 
   function emitNotice(message, level = "info", ttlMs = 4000) {
@@ -2081,9 +2130,9 @@
   function restorePromptMessage() {
     emitOverlay({ mode: "clear" });
     if (lastPromptMessage) {
-      socket.emit("send_prompt", { message: lastPromptMessage });
+      emitToRoom("send_prompt", { message: lastPromptMessage });
     } else {
-      socket.emit("prompt_update", { message: "" });
+      emitToRoom("clear_prompt", {});
     }
   }
 
@@ -2092,7 +2141,7 @@
       return;
     }
     const elapsed = durationSeconds - remainingSeconds;
-    socket.emit("time_update", {
+    emitToRoom("time_update", {
       elapsed,
       remaining: remainingSeconds,
       running: isRunning,
@@ -2574,7 +2623,7 @@
     if (!text) {
       return;
     }
-    socket.emit("send_prompt", { message: text });
+    emitToRoom("send_prompt", { message: text });
     lastPromptLabel.textContent = text;
     lastPromptMessage = text;
   }
@@ -3957,13 +4006,13 @@
       }
     });
     clearPromptBtn.addEventListener("click", () => {
-      socket.emit("clear_prompt");
+      emitToRoom("clear_prompt", {});
       lastPromptLabel.textContent = "未送信";
       lastPromptMessage = "";
     });
 
     screenAttentionBtn.addEventListener("click", () => {
-      socket.emit("screen_attention");
+      emitToRoom("screen_attention", {});
     });
 
     noteForm.addEventListener("submit", submitNote);
@@ -4260,7 +4309,7 @@
         const emoji = btn.dataset.reaction;
         const label = btn.dataset.label;
         if (emoji && label && socket) {
-          socket.emit("send_reaction", { emoji, label });
+          emitToRoom("send_reaction", { emoji, label });
           // 視覚的フィードバック
           btn.style.transform = "scale(0.9)";
           setTimeout(() => {

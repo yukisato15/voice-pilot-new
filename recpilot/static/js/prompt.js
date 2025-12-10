@@ -1,5 +1,16 @@
 (() => {
-  const socket = io();
+  const socket = io({ autoConnect: false });
+  const params = new URLSearchParams(window.location.search);
+  const roomFromQuery = (params.get("room") || "").trim();
+  const storedRoom = (localStorage.getItem("recpilot-room-id") || "").trim();
+  let currentRoomId = roomFromQuery || storedRoom;
+  if (roomFromQuery) {
+    try {
+      localStorage.setItem("recpilot-room-id", roomFromQuery);
+    } catch (err) {
+      console.warn("roomId の保存に失敗しました", err);
+    }
+  }
 
   const promptText = document.getElementById("prompt-text");
   const promptMeta = document.getElementById("prompt-meta");
@@ -24,6 +35,20 @@
     "underage": "※未成年の方は体験談ではなく「想像」や「見聞きした話」でOKです",
     "personal-info": "※実名・学校名・地名など、個人を特定できる内容は避けましょう",
   };
+
+  function ensureRoomJoin() {
+    if (!currentRoomId) {
+      console.warn("roomId が設定されていないため、Socket接続を待機します。?room=xxxx で指定してください。");
+      return;
+    }
+    if (!socket.connected) {
+      socket.connect();
+    }
+    socket.emit("join_room", { roomId: currentRoomId });
+  }
+
+  socket.on("connect", ensureRoomJoin);
+  ensureRoomJoin();
 
   let overlayTimeoutId = null;
   let noticeTimeoutId = null;

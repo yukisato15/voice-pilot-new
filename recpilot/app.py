@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 
 try:
     from watchdog.events import FileSystemEventHandler  # type: ignore
@@ -31,6 +31,14 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 JST = ZoneInfo("Asia/Tokyo")
+
+
+def _get_room_id(payload: Optional[Dict[str, object]]) -> Optional[str]:
+    """Extract roomId from socket payload."""
+    if not isinstance(payload, dict):
+        return None
+    room_id = str(payload.get("roomId") or "").strip()
+    return room_id or None
 
 def require_env(name: str) -> str:
     value = os.environ.get(name)
@@ -873,8 +881,20 @@ def api_report_update():
     return jsonify({"success": True, "row": updated})
 
 
+@socketio.on("join_room")
+def handle_join_room(data: Optional[Dict[str, object]]) -> None:
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
+    join_room(room_id)
+    emit("room_joined", {"roomId": room_id}, room=room_id, include_self=True)
+
+
 @socketio.on("send_prompt")
 def handle_send_prompt(data: Optional[Dict[str, str]]) -> None:
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
     message = (data or {}).get("message", "").strip()
     emit(
         "prompt_update",
@@ -882,51 +902,67 @@ def handle_send_prompt(data: Optional[Dict[str, str]]) -> None:
             "message": message,
             "sentAt": datetime.now().isoformat(),
         },
-        broadcast=True,
+        room=room_id,
     )
 
 
 @socketio.on("clear_prompt")
-def handle_clear_prompt() -> None:
+def handle_clear_prompt(data: Optional[Dict[str, object]] = None) -> None:
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
     emit(
         "prompt_update",
         {
             "message": "",
             "sentAt": datetime.now().isoformat(),
         },
-        broadcast=True,
+        room=room_id,
     )
 
 
 @socketio.on("prompt_overlay")
 def handle_prompt_overlay(data: Optional[Dict[str, object]]) -> None:
-    emit("prompt_overlay", data or {}, broadcast=True)
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
+    emit("prompt_overlay", data or {}, room=room_id)
 
 
 @socketio.on("theme_update")
 def handle_theme_update(data: Optional[Dict[str, object]]) -> None:
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
     payload = {
         "title": (data or {}).get("title", ""),
         "category": (data or {}).get("category", ""),
         "hints": (data or {}).get("hints", []) or [],
     }
-    emit("theme_update", payload, broadcast=True)
+    emit("theme_update", payload, room=room_id)
 
 
 @socketio.on("time_update")
 def handle_time_update(data: Optional[Dict[str, object]]) -> None:
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
     payload = {
         "elapsed": max(0, int((data or {}).get("elapsed", 0) or 0)),
         "remaining": max(0, int((data or {}).get("remaining", 0) or 0)),
         "running": bool((data or {}).get("running", False)),
+        "critical": bool((data or {}).get("critical", False)),
     }
-    emit("time_update", payload, broadcast=True)
+    emit("time_update", payload, room=room_id)
 
 
 @socketio.on("send_reaction")
 def handle_send_reaction(data: Optional[Dict[str, str]]) -> None:
     """リアクションをPrompt画面にブロードキャスト"""
     if not data:
+        return
+    room_id = _get_room_id(data)
+    if not room_id:
         return
     emoji = (data.get("emoji") or "").strip()
     label = (data.get("label") or "").strip()
@@ -936,13 +972,16 @@ def handle_send_reaction(data: Optional[Dict[str, str]]) -> None:
         "emoji": emoji,
         "label": label,
     }
-    emit("show_reaction", payload, broadcast=True)
+    emit("show_reaction", payload, room=room_id)
 
 
 @socketio.on("screen_attention")
-def handle_screen_attention() -> None:
+def handle_screen_attention(data: Optional[Dict[str, object]] = None) -> None:
     """画面注目アラートをPrompt画面にブロードキャスト"""
-    emit("screen_attention", broadcast=True)
+    room_id = _get_room_id(data)
+    if not room_id:
+        return
+    emit("screen_attention", room=room_id)
 
 
 @app.route("/api/export-session", methods=["POST"])

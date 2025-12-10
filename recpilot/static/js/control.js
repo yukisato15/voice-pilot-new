@@ -484,7 +484,7 @@
 
   function getMaxTakeNumber() {
     const finishedMax = finishedTakes.reduce((max, item) => Math.max(max, Number(item.take) || 0), 0);
-    return Math.max(finishedMax, sessionCount || 1);
+    return finishedMax;
   }
 
   function extractTakeDisplay(sessionLabel, takeValue) {
@@ -2343,7 +2343,9 @@
 
   function handleEarlyFinish(reason = "early_finish") {
     // reason is informational only for future logging
+    const currentTake = getCurrentTakeValue();
     resetTimecodeOnly();
+    markTakeCompleted(currentTake);
     advanceToNextTake();
   }
 
@@ -2357,6 +2359,23 @@
     } else {
       skipNextStartIncrement = true; // 次の開始でテイクを据え置き
     }
+  }
+
+  function markTakeCompleted(takeNumber) {
+    const takeValue = String(takeNumber);
+    const existingIndex = finishedTakes.findIndex((item) => String(item.take) === takeValue);
+    const record = {
+      take: takeValue,
+      completed: true,
+      exported: finishedTakes[existingIndex]?.exported || false,
+      exportedAt: finishedTakes[existingIndex]?.exportedAt || null,
+    };
+    if (existingIndex >= 0) {
+      finishedTakes.splice(existingIndex, 1, { ...finishedTakes[existingIndex], ...record });
+    } else {
+      finishedTakes.push(record);
+    }
+    renderTakeExports();
   }
 
   async function exportTake(takeNumber, showAlert = true) {
@@ -2384,7 +2403,7 @@
       }
       triggerDownload(data.filename || `export_${Date.now()}.csv`, data.content || "");
       const existingIndex = finishedTakes.findIndex((item) => String(item.take) === takeValue);
-      const record = { take: takeValue, summary: "", exportedAt: new Date().toISOString() };
+      const record = { take: takeValue, summary: "", exportedAt: new Date().toISOString(), exported: true, completed: true };
       if (existingIndex >= 0) {
         finishedTakes.splice(existingIndex, 1, record);
       } else {
@@ -2413,15 +2432,18 @@
     if (!takeExportsContainer) {
       return;
     }
-    const maxTake = Math.max(getMaxTakeNumber(), 3);
+    const maxTake = getMaxTakeNumber();
+    takeExportsContainer.innerHTML = "";
+    if (maxTake === 0) {
+      takeExportsContainer.innerHTML =
+        '<p class="text-xs text-gh-textMuted">まだ出力可能なテイクはありません。収録を完了するとここに表示されます。</p>';
+      return;
+    }
     takeExportsContainer.innerHTML = "";
     for (let take = 1; take <= maxTake; take += 1) {
       const takeLabel = formatTakeLabel(take);
       const existing = finishedTakes.find((item) => String(item.take) === String(take));
-      const status = existing ? "出力済" : "未出力";
-      const badgeClass = existing
-        ? "bg-emerald-600 text-white"
-        : "bg-slate-700 text-slate-200";
+      const status = existing?.exported ? "出力済" : existing?.completed ? "未出力" : "未完了";
       const chip = document.createElement("div");
       chip.className =
         "flex items-center gap-2 rounded-xl border border-gh-border bg-gh-bg px-3 py-2 shadow-sm";

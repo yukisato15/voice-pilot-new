@@ -1475,6 +1475,31 @@
     if (!themePopover) {
       return;
     }
+    if (category === "自分で記入") {
+      const title = window.prompt("自由入力のテーマを記入してください", "");
+      if (!title) {
+        return;
+      }
+      const id = `custom_manual_${Date.now()}`;
+      const theme = {
+        id,
+        no: "自分で記入",
+        category: "自分で記入",
+        title: title.trim(),
+        baseHints: [],
+        extraHint1: [],
+        extraHint2: [],
+        marks: [],
+      };
+      themeById.set(id, theme);
+      if (!themesByCategory.has("自分で記入")) {
+        themesByCategory.set("自分で記入", []);
+      }
+      themesByCategory.get("自分で記入").unshift(theme);
+      allThemes.unshift(theme);
+      handleThemeSelection(id);
+      return;
+    }
     if (currentPopoverCategory === category && !themePopover.classList.contains("hidden")) {
       closeThemePopover();
       return;
@@ -1670,7 +1695,11 @@
 
       const stats = document.createElement("span");
       stats.className = allUsed ? "text-xs text-slate-400" : "text-sm text-white/85";
-      stats.textContent = `残り ${remaining}/${themes.length}`;
+      if (category === "自分で記入") {
+        stats.textContent = "自由入力";
+      } else {
+        stats.textContent = `残り ${remaining}/${themes.length}`;
+      }
 
       button.append(name, stats);
       if (!allUsed) {

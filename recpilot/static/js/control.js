@@ -442,6 +442,7 @@
   let contentManuallyShown = false;
   let lastPromptMessage = "";
   let currentEditableNote = null; // {timecode, take, groupId, session}
+  let activeContentEditor = null;
   let preRollActive = false;
   let hasStarted = false;
   let completionSequenceStarted = false;
@@ -2934,10 +2935,72 @@
         noteActionBtn.disabled = true;
       }
       currentEditableNote = null;
+      if (activeContentEditor) {
+        activeContentEditor.remove();
+        activeContentEditor = null;
+      }
     } catch (error) {
       console.error(error);
       alert("メモの更新に失敗しました。コンソールを確認してください。");
     }
+  }
+
+  function openInlineEditor(rowEl, meta) {
+    const cell = rowEl.querySelector(".editable-content");
+    if (!cell) return;
+    if (activeContentEditor) {
+      activeContentEditor.remove();
+      activeContentEditor = null;
+    }
+    const editor = document.createElement("div");
+    editor.className = "mt-2 rounded-lg border border-gh-border bg-gh-bg p-2";
+    editor.innerHTML = `
+      <textarea class="w-full rounded border border-gh-border bg-gh-bg px-2 py-1 text-sm text-gh-text" rows="2">${meta.content || ""}</textarea>
+      <div class="mt-2 flex gap-2">
+        <button type="button" class="rounded bg-gh-blue px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-gh-blueDark save-btn">保存</button>
+        <button type="button" class="rounded border border-gh-border px-3 py-1 text-xs font-bold text-gh-text cancel-btn">キャンセル</button>
+      </div>
+    `;
+    const textarea = editor.querySelector("textarea");
+    const saveBtn = editor.querySelector(".save-btn");
+    const cancelBtn = editor.querySelector(".cancel-btn");
+
+    const cleanup = () => {
+      editor.remove();
+      activeContentEditor = null;
+    };
+
+    saveBtn?.addEventListener("click", async () => {
+      const newContent = textarea?.value.trim() || "";
+      try {
+        const response = await fetch("/api/report/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            groupId: meta.groupId,
+            session: meta.session,
+            take: meta.take,
+            timecode: meta.timecode,
+            content: newContent,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "更新に失敗しました");
+        }
+        renderNoteRow(data.row, rowEl);
+        cleanup();
+      } catch (error) {
+        console.error(error);
+        alert("メモの更新に失敗しました。コンソールを確認してください。");
+      }
+    });
+
+    cancelBtn?.addEventListener("click", cleanup);
+
+    cell.appendChild(editor);
+    activeContentEditor = editor;
+    textarea?.focus();
   }
 
   function toggleContentArea() {
@@ -3807,18 +3870,8 @@
       const take = rowEl.dataset.take || cell.dataset.take || getCurrentTakeValue();
       const session = rowEl.dataset.session || cell.dataset.session || appState.session;
       const group = rowEl.dataset.group || cell.dataset.group || appState.groupId;
-      const currentText = cell.textContent?.trim() || "";
-      const next = window.prompt("内容を入力してください", currentText === "内容入力待ち..." ? "" : currentText);
-      if (next === null) return;
-      inputContent.value = next;
-      contentWrapper?.classList.remove("hidden");
-      contentManuallyShown = true;
-      if (toggleContentBtn) toggleContentBtn.textContent = "詳細メモ欄を隠す";
-      currentEditableNote = { timecode, take, groupId: group, session };
-      if (noteActionBtn) {
-        noteActionBtn.disabled = false;
-        noteActionBtn.textContent = "更新";
-      }
+      const currentText = cell.textContent?.trim() === "内容入力待ち..." ? "" : (cell.textContent?.trim() || "");
+      openInlineEditor(rowEl, { timecode, take, session, groupId: group, content: currentText });
     });
 
     if (categorySelect) {

@@ -259,11 +259,7 @@ def generate_session_csv(
     start_time_str: str,
     recording_time_str: str,
 ) -> tuple[bytes, int]:
-    report_rows = [
-        row
-        for row in load_report_rows()
-        if row.get("組番号", "").strip() == group_id and row.get("セッション", "").strip() == session_label
-    ]
+    report_rows = filter_report_rows(group_id, session_label, take_label)
 
     participants_str = ", ".join([str(p).strip() for p in participants if str(p).strip()])
     offset_str = f"{offset_seconds:+.3f}" if offset_seconds else "0.000"
@@ -316,6 +312,9 @@ def generate_session_csv(
         comment = (row.get("内容") or "").strip()
         start_tc = normalize_timecode(row.get("タイムコード", ""))
         adjusted_start = apply_offset_to_timecode(start_tc, offset_seconds)
+        # オフセット適用で00:00:00になってしまう場合は、元のタイムコードを優先して残す
+        if adjusted_start == "00:00:00" and start_tc not in ("", "00:00:00"):
+            adjusted_start = start_tc
         created_at = (row.get("日時") or "").strip()
         writer.writerow(
             [
@@ -582,12 +581,33 @@ except Exception as exc:  # pragma: no cover - defensive startup guard
 
 
 def ensure_report_headers() -> None:
-    if REPORT_CSV.exists():
+    headers = ["日時", "組番号", "セッション", "テイク", "タイムコード", "内容", "カテゴリ"]
+    if not REPORT_CSV.exists():
+        with REPORT_CSV.open("w", encoding="utf-8", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(headers)
         return
-    headers = ["日時", "組番号", "セッション", "タイムコード", "内容", "カテゴリ"]
+
+    # ヘッダーが古い場合（テイク列なし）は追記前にアップグレードする
+    with REPORT_CSV.open("r", encoding="utf-8", newline="") as csvfile:
+        reader = csv.reader(csvfile)
+        existing_headers = next(reader, [])
+        if "テイク" in existing_headers:
+            return
+        rows = list(reader)
+
+    # 既存データを保持したままヘッダーを更新
+    upgraded_rows = []
+    for row in rows:
+        if len(row) >= 6:
+            upgraded_rows.append([row[0], row[1], row[2], "", row[3], row[4], row[5]])
+        else:
+            upgraded_rows.append((row + [""] * (7 - len(row)))[:7])
+
     with REPORT_CSV.open("w", encoding="utf-8", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(headers)
+        writer.writerows(upgraded_rows)
 
 
 def load_report_rows() -> List[Dict[str, str]]:
@@ -599,6 +619,23 @@ def load_report_rows() -> List[Dict[str, str]]:
         reader = csv.DictReader(csvfile)
         for row in reader:
             rows.append(row)
+    return rows
+
+
+def filter_report_rows(group_id: str, session_label: str, take_label: Optional[str] = None) -> List[Dict[str, str]]:
+    """
+    収録の絞り込み: グループ/セッションで絞り、テイク列が存在する場合はテイクも一致させる。
+    既存データにテイク列がない場合は従来通り全件を返す。
+    """
+    take_label = (take_label or "").strip()
+    rows = [
+        row
+        for row in load_report_rows()
+        if row.get("組番号", "").strip() == group_id and row.get("セッション", "").strip() == session_label
+    ]
+    has_take_column = any("テイク" in row for row in rows) or any("テイク" in (row.keys()) for row in rows)
+    if has_take_column and take_label:
+        rows = [row for row in rows if (row.get("テイク") or "").strip() == take_label]
     return rows
 
 
@@ -713,12 +750,13 @@ def api_report():
 
     group_id = (data.get("groupId") or "").strip()
     session_label = (data.get("session") or "").strip()
+    take_label = (str(data.get("take") or "").strip())
     category = (data.get("category") or "").strip()
     timecode = (data.get("timecode") or "").strip() or "--:--:--"
 
     timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
-    row = [timestamp, group_id, session_label, timecode, content, category]
+    row = [timestamp, group_id, session_label, take_label, timecode, content, category]
     with REPORT_CSV.open("a", encoding="utf-8", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(row)
@@ -730,6 +768,7 @@ def api_report():
                 "timestamp": timestamp,
                 "groupId": group_id,
                 "session": session_label,
+                "take": take_label,
                 "timecode": timecode,
                 "content": content,
                 "category": category,

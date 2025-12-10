@@ -472,15 +472,23 @@
     return `S${String(safe).padStart(2, "0")}`;
   }
 
-  function extractTakeDisplay(sessionLabel) {
-    if (!sessionLabel) {
-      return "-";
+  function getCurrentTakeValue() {
+    return String(Math.max(sessionCount || 1, 1));
+  }
+
+  function extractTakeDisplay(sessionLabel, takeValue) {
+    const explicit = takeValue ? String(takeValue).trim() : "";
+    if (explicit) {
+      return formatTakeLabel(explicit.replace(/^S/i, ""));
     }
-    const match = sessionLabel.match(/_S(\d{2})$/i) || sessionLabel.match(/S(\d{1,})$/i);
-    if (match && match[1]) {
-      return `S${String(match[1]).padStart(2, "0")}`;
+    if (sessionLabel) {
+      const match = sessionLabel.match(/_S(\d{2})$/i) || sessionLabel.match(/S(\d{1,})$/i);
+      if (match && match[1]) {
+        return `S${String(match[1]).padStart(2, "0")}`;
+      }
+      return sessionLabel;
     }
-    return sessionLabel;
+    return "-";
   }
 
   function buildSessionLabel(takeNumber) {
@@ -2427,7 +2435,7 @@
     if (!notesTableBody) {
       return;
     }
-    const takeDisplay = extractTakeDisplay(row.session);
+    const takeDisplay = extractTakeDisplay(row.session, row.take);
     const html = `
       <td class="px-3 py-2 font-mono text-xs text-slate-700">${row.timecode || "--:--:--"}</td>
       <td class="px-3 py-2 text-slate-600">${row.groupId || "-"}</td>
@@ -2450,7 +2458,7 @@
     if (!notesTableBody) {
       return null;
     }
-    const takeDisplay = note.takeDisplay || extractTakeDisplay(note.session);
+    const takeDisplay = note.takeDisplay || extractTakeDisplay(note.session, note.take);
     const tr = document.createElement("tr");
     tr.className = "bg-blue-50 last:rounded-b-lg";
     tr.innerHTML = `
@@ -2523,6 +2531,7 @@
     const payload = {
       groupId: appState.groupId,
       session: appState.session,
+      take: getCurrentTakeValue(),
       category: THEME_CHANGE_CATEGORY,
       content: `テーマ変更: ${content}`,
       timecode: formatTime(durationSeconds - remainingSeconds),
@@ -2589,7 +2598,8 @@
     const note = {
       groupId: appState.groupId,
       session: appState.session,
-      takeDisplay: extractTakeDisplay(appState.session || buildSessionLabel()),
+      take: getCurrentTakeValue(),
+      takeDisplay: extractTakeDisplay(appState.session || buildSessionLabel(), getCurrentTakeValue()),
       categoryDisplay: categoryLabel,
       rawCategory: categoryValue,
       timecode: formatTime(durationSeconds - remainingSeconds),
@@ -2624,6 +2634,7 @@
     const payload = {
       groupId: pendingNote.groupId,
       session: pendingNote.session,
+      take: pendingNote.take || getCurrentTakeValue(),
       category: pendingNote.categoryDisplay,
       content,
       timecode: pendingNote.timecode,

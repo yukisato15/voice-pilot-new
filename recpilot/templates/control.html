@@ -255,8 +255,8 @@
         class="w-full max-w-3xl space-y-5 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl"
       >
         <div class="flex items-center justify-between">
-          <h2 class="text-xl font-semibold text-gh-text">セッション情報を入力してください</h2>
-          <span class="text-xs font-medium text-gh-textMuted">全項目必須</span>
+          <h2 class="text-2xl font-bold text-gh-text">セッション情報を入力してください</h2>
+          <span class="text-xs font-semibold text-gh-textMuted">全項目必須</span>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
@@ -270,12 +270,14 @@
             />
           </label>
           <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
-            セッション
+            セッション年月日（YYYYMMDD）
             <input
-              id="setup-session"
+              id="setup-session-date"
               type="text"
               required
-              placeholder="例: 1"
+              inputmode="numeric"
+              maxlength="8"
+              placeholder="例: 20251205"
               class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
             />
           </label>

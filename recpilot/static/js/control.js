@@ -126,7 +126,7 @@
   const setupModal = document.getElementById("setup-modal");
   const setupForm = document.getElementById("setup-form");
   const setupGroup = document.getElementById("setup-group");
-  const setupSession = document.getElementById("setup-session");
+  const setupSessionDate = document.getElementById("setup-session-date");
   const setupDirector = document.getElementById("setup-director");
   const setupParticipantA = document.getElementById("setup-participant-a");
   const setupParticipantB = document.getElementById("setup-participant-b");
@@ -422,6 +422,7 @@
   let currentTemplateCategory = null; // 現在開いているパターン別メッセージカテゴリ
   const appState = {
     groupId: "",
+    sessionDate: "",
     session: "",
     director: "",
     participantA: "",
@@ -455,13 +456,44 @@
   let breakPreviousPrompt = "";
   const OFFSET_POLLING_INTERVAL_MS = 15000;
 
+  function formatGroupLabel(rawGroupId) {
+    const value = (rawGroupId || "").trim();
+    if (!value) return "";
+    if (/^g?\d+$/i.test(value)) {
+      const digits = value.replace(/^g/i, "");
+      return `G${digits.padStart(3, "0")}`;
+    }
+    return value;
+  }
+
+  function formatTakeLabel(rawTakeNumber) {
+    const num = Number(rawTakeNumber);
+    const safe = Number.isFinite(num) && num > 0 ? num : 1;
+    return `S${String(safe).padStart(2, "0")}`;
+  }
+
+  function buildSessionLabel(takeNumber) {
+    const date = (appState.sessionDate || "").trim();
+    const groupLabel = formatGroupLabel(appState.groupId);
+    if (!date || !groupLabel) {
+      return appState.session || "";
+    }
+    const take = formatTakeLabel(takeNumber ?? Math.max(sessionCount, 1));
+    return `${date}_${groupLabel}_${take}`;
+  }
+
+  function refreshSessionLabel(takeNumber) {
+    appState.session = buildSessionLabel(takeNumber);
+  }
+
   function getBreakDurationSeconds() {
     return Math.max(1, settings.breakDurationMinutes || 5) * 60;
   }
 
   function updateSummary() {
     summaryGroup.textContent = appState.groupId || "--";
-    summarySession.textContent = appState.session || "--";
+    const sessionLabel = appState.session || buildSessionLabel();
+    summarySession.textContent = sessionLabel || "--";
     summaryDirector.textContent = appState.director || "--";
     const participants = [appState.participantA, appState.participantB].filter(Boolean).join(" / ");
     summaryParticipants.textContent = participants || "--";
@@ -1634,22 +1666,22 @@
     } else {
       themePanelExpanded = !themePanelExpanded;
     }
-  if (themePanelExpanded) {
-    categoryGrid.classList.remove("hidden");
-    themePanelIndicator.textContent = "閉じる";
-    if (themePanelIndicatorIcon) {
-      themePanelIndicatorIcon.textContent = "▲";
-      themePanelIndicatorIcon.style.transform = "rotate(180deg)";
-    }
-  } else {
-    categoryGrid.classList.add("hidden");
-    themePanelIndicator.textContent = "開く";
-    if (themePanelIndicatorIcon) {
-      themePanelIndicatorIcon.textContent = "▼";
-      themePanelIndicatorIcon.style.transform = "rotate(0deg)";
+    if (themePanelExpanded) {
+      categoryGrid.classList.remove("hidden");
+      themePanelIndicator.textContent = "閉じる";
+      if (themePanelIndicatorIcon) {
+        themePanelIndicatorIcon.textContent = "▲";
+        themePanelIndicatorIcon.style.transform = "rotate(180deg)";
+      }
+    } else {
+      categoryGrid.classList.add("hidden");
+      themePanelIndicator.textContent = "開く";
+      if (themePanelIndicatorIcon) {
+        themePanelIndicatorIcon.textContent = "▼";
+        themePanelIndicatorIcon.style.transform = "rotate(0deg)";
+      }
     }
   }
-}
 
   function applyAppState() {
     updateSummary();
@@ -1657,7 +1689,7 @@
       finishGroup.value = appState.groupId;
     }
     if (finishSession) {
-      finishSession.value = appState.session;
+      finishSession.value = appState.session || buildSessionLabel();
     }
   }
 
@@ -1741,7 +1773,7 @@
 
   function fillSetupForm() {
     if (setupGroup) setupGroup.value = appState.groupId;
-    if (setupSession) setupSession.value = appState.session;
+    if (setupSessionDate) setupSessionDate.value = appState.sessionDate;
     if (setupDirector) setupDirector.value = appState.director;
     if (setupParticipantA) setupParticipantA.value = appState.participantA;
     if (setupParticipantB) setupParticipantB.value = appState.participantB;
@@ -1772,27 +1804,37 @@
   function handleSetupSubmit(event) {
     event.preventDefault();
     const previousGroup = appState.groupId;
+    const previousSessionDate = appState.sessionDate;
     const previousSession = appState.session;
     const groupId = (setupGroup?.value || "").trim();
-    const session = (setupSession?.value || "").trim();
+    const sessionDate = (setupSessionDate?.value || "").trim();
     const director = (setupDirector?.value || "").trim();
     const participantA = (setupParticipantA?.value || "").trim();
     const participantB = (setupParticipantB?.value || "").trim();
 
-    if (!groupId || !session || !director || !participantA || !participantB) {
+    if (!groupId || !sessionDate || !director || !participantA || !participantB) {
       alert("全ての項目を入力してください。");
+      return;
+    }
+    if (!/^[0-9]{8}$/.test(sessionDate)) {
+      alert("セッション年月日は YYYYMMDD 形式の8桁で入力してください。");
       return;
     }
 
     appState.groupId = groupId;
-    appState.session = session;
+    appState.sessionDate = sessionDate;
     appState.director = director;
     appState.participantA = participantA;
     appState.participantB = participantB;
-    const isNewSession = previousGroup !== groupId || previousSession !== session;
+    const isNewSession = previousGroup !== groupId || previousSessionDate !== sessionDate || !previousSession;
     if (isNewSession) {
+      sessionCount = 0;
       finishedTakes.length = 0;
+      Object.keys(sessionSegments).forEach((key) => delete sessionSegments[key]);
+      Object.keys(segmentByTake).forEach((key) => delete segmentByTake[key]);
+      currentSegmentId = null;
     }
+    refreshSessionLabel(isNewSession ? 1 : undefined);
 
     applyAppState();
     closeThemePopover();
@@ -2105,6 +2147,8 @@
 
       // セッションカウントを増やす
       sessionCount++;
+      refreshSessionLabel(sessionCount);
+      applyAppState();
     }
     isRunning = true;
     hasStarted = true;

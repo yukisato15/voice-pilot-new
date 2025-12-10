@@ -9,11 +9,11 @@ import os
 import re
 import shutil
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 from flask_socketio import SocketIO, emit
@@ -30,6 +30,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+JST = ZoneInfo("Asia/Tokyo")
 
 def require_env(name: str) -> str:
     value = os.environ.get(name)
@@ -192,13 +193,15 @@ def timecode_to_seconds(value: str) -> Optional[float]:
 
 
 def seconds_to_timecode(total_seconds: float) -> str:
-    safe_seconds = max(0.0, round(float(total_seconds), 3))
-    hours = int(safe_seconds // 3600)
-    minutes = int((safe_seconds % 3600) // 60)
-    seconds = safe_seconds - hours * 3600 - minutes * 60
+    safe_seconds = round(float(total_seconds), 3)
+    sign = "-" if safe_seconds < 0 else ""
+    abs_seconds = abs(safe_seconds)
+    hours = int(abs_seconds // 3600)
+    minutes = int((abs_seconds % 3600) // 60)
+    seconds = abs_seconds - hours * 3600 - minutes * 60
     if abs(seconds - round(seconds)) < 1e-3:
-        return f"{hours:02d}:{minutes:02d}:{int(round(seconds)):02d}"
-    return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}"
+        return f"{sign}{hours:02d}:{minutes:02d}:{int(round(seconds)):02d}"
+    return f"{sign}{hours:02d}:{minutes:02d}:{seconds:06.3f}"
 
 
 def apply_offset_to_timecode(timecode: str, offset_seconds: float) -> str:
@@ -223,7 +226,9 @@ def build_summary_comment(summary: str, offset_seconds: float, offset_source: st
 def format_timestamp(value: Optional[datetime]) -> str:
     if not isinstance(value, datetime):
         return ""
-    return value.strftime("%Y/%m/%d %H:%M:%S.%f")[:-3]
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(JST).strftime("%Y/%m/%d %H:%M:%S.%f")[:-3]
 
 
 ZOOM_TIMESTAMP_PATTERN = re.compile(r"(20\d{2})-(\d{2})-(\d{2})[ _](\d{2})\.(\d{2})\.(\d{2})")
@@ -295,7 +300,7 @@ def generate_session_csv(
             "00:00:00",
             "0:00:00",
             "SUMMARY",
-            datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
+            datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S"),
             director,
             participants_str,
             take_label,
@@ -633,7 +638,7 @@ def filter_report_rows(group_id: str, session_label: str, take_label: Optional[s
         for row in load_report_rows()
         if row.get("組番号", "").strip() == group_id and row.get("セッション", "").strip() == session_label
     ]
-    has_take_column = any("テイク" in row for row in rows) or any("テイク" in (row.keys()) for row in rows)
+    has_take_column = any("テイク" in row.keys() for row in rows)
     if has_take_column and take_label:
         rows = [row for row in rows if (row.get("テイク") or "").strip() == take_label]
     return rows
@@ -754,7 +759,7 @@ def api_report():
     category = (data.get("category") or "").strip()
     timecode = (data.get("timecode") or "").strip() or "--:--:--"
 
-    timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    timestamp = datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S")
 
     row = [timestamp, group_id, session_label, take_label, timecode, content, category]
     with REPORT_CSV.open("a", encoding="utf-8", newline="") as csvfile:

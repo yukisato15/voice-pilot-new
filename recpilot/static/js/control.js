@@ -38,6 +38,10 @@
   const themeHistoryButton = document.getElementById("theme-history-button");
   const themePopover = document.getElementById("theme-popover");
   const themePanelIndicatorIcon = document.getElementById("theme-panel-indicator-icon");
+  const customThemePanel = document.getElementById("custom-theme-panel");
+  const customThemeInput = document.getElementById("custom-theme-title");
+  const customThemeSubmit = document.getElementById("custom-theme-submit");
+  const customThemeClose = document.getElementById("custom-theme-close");
   const hintBaseBtn = document.getElementById("hint-base-btn");
   const hintExtra1Btn = document.getElementById("hint-extra1-btn");
   const hintExtra2Btn = document.getElementById("hint-extra2-btn");
@@ -1471,33 +1475,66 @@
     return button;
   }
 
+  function openCustomThemePanel() {
+    if (!customThemePanel) {
+      return;
+    }
+    closeThemePopover();
+    customThemePanel.classList.remove("hidden");
+    if (customThemeInput) {
+      customThemeInput.focus();
+      customThemeInput.select();
+    }
+    customThemePanel.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function closeCustomThemePanel() {
+    if (!customThemePanel) {
+      return;
+    }
+    customThemePanel.classList.add("hidden");
+    if (customThemeInput) {
+      customThemeInput.value = "";
+    }
+  }
+
+  function handleCustomThemeSubmit() {
+    if (!customThemeInput) {
+      return;
+    }
+    const title = customThemeInput.value.trim();
+    if (!title) {
+      customThemeInput.focus();
+      return;
+    }
+    const id = `custom_manual_${Date.now()}`;
+    const theme = {
+      id,
+      no: "自分で記入",
+      category: "自分で記入",
+      title,
+      baseHints: [],
+      extraHint1: [],
+      extraHint2: [],
+      marks: [],
+    };
+    themeById.set(id, theme);
+    if (!themesByCategory.has("自分で記入")) {
+      themesByCategory.set("自分で記入", []);
+    }
+    themesByCategory.get("自分で記入").unshift(theme);
+    allThemes.unshift(theme);
+    renderCategoryButtons();
+    handleThemeSelection(id);
+    customThemeInput.value = "";
+  }
+
   function openCategoryPopover(category, anchor) {
     if (!themePopover) {
       return;
     }
     if (category === "自分で記入") {
-      const title = window.prompt("自由入力のテーマを記入してください", "");
-      if (!title) {
-        return;
-      }
-      const id = `custom_manual_${Date.now()}`;
-      const theme = {
-        id,
-        no: "自分で記入",
-        category: "自分で記入",
-        title: title.trim(),
-        baseHints: [],
-        extraHint1: [],
-        extraHint2: [],
-        marks: [],
-      };
-      themeById.set(id, theme);
-      if (!themesByCategory.has("自分で記入")) {
-        themesByCategory.set("自分で記入", []);
-      }
-      themesByCategory.get("自分で記入").unshift(theme);
-      allThemes.unshift(theme);
-      handleThemeSelection(id);
+      openCustomThemePanel();
       return;
     }
     if (currentPopoverCategory === category && !themePopover.classList.contains("hidden")) {
@@ -1667,23 +1704,25 @@
     }
 
     sortedCategories.forEach((category, index) => {
+      const isCustom = category === "自分で記入";
       const themes = themesByCategory.get(category) || [];
-      const usedCount = themes.filter((theme) => usedThemeIds.has(theme.id)).length;
-      const remaining = Math.max(0, themes.length - usedCount);
-      const allUsed = themes.length > 0 && remaining === 0;
+      const usedCount = isCustom ? 0 : themes.filter((theme) => usedThemeIds.has(theme.id)).length;
+      const remaining = isCustom ? Number.POSITIVE_INFINITY : Math.max(0, themes.length - usedCount);
+      const allUsed = isCustom ? false : themes.length > 0 && remaining === 0;
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.role = "category-button";
       button.dataset.category = category;
 
-      const gradient = category === "自分で記入" ? "from-indigo-500 via-sky-500 to-emerald-400" : getCategoryGradient(index);
+      const gradient = isCustom ? "from-indigo-500 via-sky-500 to-emerald-400" : getCategoryGradient(index);
       const baseClass =
-        "flex min-h-[140px] flex-col justify-center gap-2 rounded-2xl px-5 py-4 text-left text-base transition focus:outline-none focus:ring-2 focus:ring-white/60";
+        "flex min-h-[150px] flex-col justify-center gap-2 rounded-2xl px-5 py-4 text-left text-base transition focus:outline-none focus:ring-2 focus:ring-white/60";
       if (allUsed) {
         button.className = `${baseClass} border border-slate-200 bg-slate-100 text-slate-400 shadow-inner`;
         button.disabled = true;
-      } else if (category === "自分で記入") {
-        button.className = `${baseClass} bg-gradient-to-br ${gradient} text-white shadow-lg ring-2 ring-white/50 hover:-translate-y-1 hover:shadow-xl`;
+      } else if (isCustom) {
+        button.className = `${baseClass} bg-gradient-to-br ${gradient} text-white shadow-lg ring-2 ring-white/60 hover:-translate-y-1.5 hover:shadow-2xl`;
+        button.style.gridColumn = "span 2";
       } else {
         button.className = `${baseClass} bg-gradient-to-br ${gradient} text-white shadow hover:-translate-y-1 hover:shadow-lg`;
       }
@@ -1694,20 +1733,32 @@
       name.textContent = displayName;
 
       const stats = document.createElement("span");
-      stats.className = allUsed ? "text-xs text-slate-400" : "text-sm text-white/85";
-      if (category === "自分で記入") {
-        stats.textContent = "自由入力";
+      stats.className = isCustom ? "text-sm font-semibold text-white/90" : allUsed ? "text-xs text-slate-400" : "text-sm text-white/85";
+      stats.textContent = isCustom ? "自由入力 / 無制限で追加できます" : `残り ${remaining}/${themes.length}`;
+
+      if (isCustom) {
+        const helper = document.createElement("span");
+        helper.className = "text-[11px] font-semibold text-white/90";
+        helper.textContent = "クリックで作成パネルを開く";
+        button.append(name, stats, helper);
       } else {
-        stats.textContent = `残り ${remaining}/${themes.length}`;
+        button.append(name, stats);
       }
 
-      button.append(name, stats);
       if (!allUsed) {
-        button.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openCategoryPopover(category, event.currentTarget);
-        });
+        if (isCustom) {
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openCustomThemePanel();
+          });
+        } else {
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openCategoryPopover(category, event.currentTarget);
+          });
+        }
       }
       categoryGrid.appendChild(button);
     });
@@ -1800,6 +1851,7 @@
       }
     } else {
       categoryGrid.classList.add("hidden");
+      closeCustomThemePanel();
       themePanelIndicator.textContent = "開く";
       if (themePanelIndicatorIcon) {
         themePanelIndicatorIcon.textContent = "▼";
@@ -4121,6 +4173,20 @@
     themeClearButton?.addEventListener("click", (event) => {
       event.preventDefault();
       clearCurrentTheme();
+    });
+    customThemeSubmit?.addEventListener("click", (event) => {
+      event.preventDefault();
+      handleCustomThemeSubmit();
+    });
+    customThemeInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        handleCustomThemeSubmit();
+      }
+    });
+    customThemeClose?.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeCustomThemePanel();
     });
     themeHistoryButton?.addEventListener("click", (event) => {
       event.preventDefault();

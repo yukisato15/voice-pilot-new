@@ -1633,7 +1633,15 @@
       updateThemeCounters();
       return;
     }
-    categoryOrder.forEach((category, index) => {
+    // 「自分で記入」を最優先で表示する
+    const sortedCategories = [...categoryOrder];
+    const customIndex = sortedCategories.indexOf("自分で記入");
+    if (customIndex > 0) {
+      sortedCategories.splice(customIndex, 1);
+      sortedCategories.unshift("自分で記入");
+    }
+
+    sortedCategories.forEach((category, index) => {
       const themes = themesByCategory.get(category) || [];
       const usedCount = themes.filter((theme) => usedThemeIds.has(theme.id)).length;
       const remaining = Math.max(0, themes.length - usedCount);
@@ -1643,12 +1651,14 @@
       button.dataset.role = "category-button";
       button.dataset.category = category;
 
-      const gradient = getCategoryGradient(index);
-  const baseClass =
-    "flex min-h-[130px] flex-col justify-center gap-2 rounded-2xl px-4 py-4 text-left text-base transition focus:outline-none focus:ring-2 focus:ring-white/60";
+      const gradient = category === "自分で記入" ? "from-indigo-500 via-sky-500 to-emerald-400" : getCategoryGradient(index);
+      const baseClass =
+        "flex min-h-[140px] flex-col justify-center gap-2 rounded-2xl px-5 py-4 text-left text-base transition focus:outline-none focus:ring-2 focus:ring-white/60";
       if (allUsed) {
         button.className = `${baseClass} border border-slate-200 bg-slate-100 text-slate-400 shadow-inner`;
         button.disabled = true;
+      } else if (category === "自分で記入") {
+        button.className = `${baseClass} bg-gradient-to-br ${gradient} text-white shadow-lg ring-2 ring-white/50 hover:-translate-y-1 hover:shadow-xl`;
       } else {
         button.className = `${baseClass} bg-gradient-to-br ${gradient} text-white shadow hover:-translate-y-1 hover:shadow-lg`;
       }

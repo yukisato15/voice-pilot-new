@@ -516,6 +516,10 @@
     appState.session = buildSessionLabel(takeNumber);
   }
 
+  function getSessionLabelForTake(takeNumber) {
+    return buildSessionLabel(takeNumber);
+  }
+
   function advanceToNextTake() {
     sessionCount = Math.max(sessionCount, 0) + 1;
     skipNextStartIncrement = true;
@@ -2383,14 +2387,20 @@
       alert("先にセッション情報を入力してください。");
       return;
     }
+    const sessionLabelForTake = getSessionLabelForTake(takeNumber);
+    if (!sessionLabelForTake) {
+      alert("セッション情報（年月日・組）が未設定のため出力できません。");
+      return;
+    }
     const takeValue = String(takeNumber);
     try {
+      console.info("[RecPilot] exportTake start", { take: takeValue, session: sessionLabelForTake });
       const response = await fetch("/api/export-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           groupId: appState.groupId,
-          session: appState.session,
+          session: sessionLabelForTake,
           take: takeValue,
           summary: "",
           director: appState.director,
@@ -2398,6 +2408,7 @@
         }),
       });
       const data = await response.json();
+      console.info("[RecPilot] exportTake response", { status: response.status, data });
       if (!response.ok || !data.success) {
         throw new Error(data.error || "CSV の生成に失敗しました");
       }
@@ -2460,10 +2471,6 @@
           CSV出力
         </button>
       `;
-      const button = chip.querySelector("button");
-      if (button) {
-        button.addEventListener("click", () => exportTake(take));
-      }
       takeExportsContainer.appendChild(chip);
     }
   }
@@ -3690,6 +3697,14 @@
     resumeBtn?.addEventListener("click", resumeAfterPause);
     earlyFinishBtn?.addEventListener("click", () => handleEarlyFinish("early_finish_button"));
     exportSummaryBtn?.addEventListener("click", exportAllTakes);
+    takeExportsContainer?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const takeAttr = target.dataset.take;
+      if (takeAttr) {
+        exportTake(Number(takeAttr));
+      }
+    });
 
     sendCustomPromptBtn.addEventListener("click", () => {
       sendPrompt(customPromptInput.value);

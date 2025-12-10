@@ -1,0 +1,15 @@
+{
+  "name": "voice-pilot-root",
+  "private": true,
+  "description": "Root workspace commands for Zoom Duo Recorder",
+  "scripts": {
+    "bootstrap": "./scripts/bootstrap.sh",
+    "dev": "npm run dev --prefix app",
+    "build": "npm run build --prefix app",
+    "lint": "npm run lint --prefix app",
+    "typecheck": "npm run typecheck --prefix app"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

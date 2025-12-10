@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "CommonJS",
+    "lib": ["ES2021"],
+    "outDir": "dist/main",
+    "rootDir": ".",
+    "composite": true,
+    "declaration": true,
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node", "electron"]
+  },
+  "include": ["main/**/*.ts", "main/**/*.d.ts", "preload.ts"],
+  "exclude": ["main/**/*.spec.ts"]
+}

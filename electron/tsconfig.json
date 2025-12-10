@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "CommonJS",
+    "rootDir": "main",
+    "outDir": "dist/main",
+    "strict": true,
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "types": ["node", "electron"],
+    "skipLibCheck": true
+  },
+  "include": ["main/**/*.ts"]
+}

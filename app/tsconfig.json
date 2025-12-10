@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "lib": ["DOM", "DOM.Iterable", "ES2021"],
+    "allowJs": false,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["renderer/*"],
+      "@store": ["renderer/store/index.ts"],
+      "@store/*": ["renderer/store/*"],
+      "@components/*": ["renderer/components/*"],
+      "@styles/*": ["styles/*"]
+    }
+  },
+  "include": ["renderer", "preload.ts"],
+  "references": [
+    {
+      "path": "./tsconfig.main.json"
+    }
+  ]
+}

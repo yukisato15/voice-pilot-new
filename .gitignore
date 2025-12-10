@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.env
+*.log
+
+# macOS
+.DS_Store
+
+# Node/Electron（生成物・依存物）
+node_modules/
+electron/node_modules/
+dist/
+build/
+*.asar
+
+# 誤って置いたバックアップ
+.git.bak/
+.git_bak/
+voice-pilot-2_2/

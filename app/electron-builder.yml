@@ -1,0 +1,12 @@
+appId: com.voicepilot.directorassist
+directories:
+  output: dist/build
+files:
+  - dist/main/**
+  - dist/renderer/**
+  - package.json
+mac:
+  category: public.app-category.productivity
+win:
+  target:
+    - nsis

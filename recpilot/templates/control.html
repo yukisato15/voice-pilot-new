@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RecPilot Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans JP"', "sans-serif"],
+            },
+            colors: {
+              // GitHub Dark Theme Colors
+              gh: {
+                bg: "#0d1117",        // 背景
+                canvas: "#161b22",    // カード背景
+                border: "#30363d",    // ボーダー
+                text: "#c9d1d9",      // テキスト
+                textMuted: "#8b949e", // 薄いテキスト
+                blue: "#58a6ff",      // プライマリブルー
+                blueDark: "#1f6feb",  // 濃いブルー
+                green: "#3fb950",     // 成功・グリーン
+                orange: "#d29922",    // 警告
+                red: "#f85149",       // エラー・削除
+                purple: "#bc8cff",    // アクセント
+                pink: "#db61a2",      // アクセント2
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+  </head>
+  <body class="bg-gh-bg text-gh-text min-h-screen">
+    <div
+      id="sync-modal"
+      class="fixed inset-0 z-[80] hidden flex items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm"
+    >
+      <div class="w-full max-w-xl space-y-6 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl ring-1 ring-black/50">
+        <header class="space-y-1">
+          <h2 class="text-xl font-semibold text-gh-text">録画開始の準備</h2>
+          <p class="text-sm text-gh-textMuted leading-relaxed">
+            Zoom のレコーディングボタンを押し、そのあとすぐに下の OK ボタンを押してください。
+          </p>
+        </header>
+        <div class="rounded-xl border border-gh-border/70 bg-gh-bg/40 px-4 py-3 text-sm text-gh-textMuted">
+          Zoom で REC を押した後、すぐに OK ボタンを押すと、RecPilot のカウントダウンが始まります。<br />
+          同期待機中は参加者画面に「待機中」と表示されるので、静かに見守ってください。
+        </div>
+        <footer class="flex justify-end gap-3">
+          <button
+            id="sync-cancel-btn"
+            type="button"
+            class="rounded-lg border border-gh-border bg-gh-bg px-5 py-2 text-sm font-semibold text-gh-text hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/40"
+          >
+            戻る
+          </button>
+          <button
+            id="sync-confirm-btn"
+            type="button"
+            class="rounded-lg bg-gh-blue px-6 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/60"
+          >
+            OK
+          </button>
+        </footer>
+      </div>
+    </div>
+    <div
+      id="stop-recording-modal"
+      class="fixed inset-0 z-[80] hidden flex items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm"
+    >
+      <div class="w-full max-w-xl space-y-6 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl ring-1 ring-black/50">
+        <header class="space-y-1">
+          <h2 class="text-xl font-semibold text-gh-text">録画停止の確認</h2>
+          <p class="text-sm text-gh-textMuted leading-relaxed">
+            Zoom のレコーディングを停止してください。停止できたら下の OK ボタンを押して、セッションの所感を入力してください。
+          </p>
+        </header>
+        <footer class="flex justify-end">
+          <button
+            id="stop-recording-confirm"
+            type="button"
+            class="rounded-lg bg-gh-blue px-6 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/60"
+          >
+            OK
+          </button>
+        </footer>
+      </div>
+    </div>
+    <div
+      id="post-session-modal"
+      class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm overflow-y-auto"
+    >
+      <form
+        id="post-session-form"
+        class="w-full max-w-xl space-y-5 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl ring-1 ring-black/50 my-10"
+      >
+        <header class="space-y-1">
+          <h2 class="text-xl font-semibold text-gh-text">セッション所感</h2>
+          <p class="text-sm text-gh-textMuted leading-relaxed">
+            1時間の収録を終えた感想や次へのメモをひとこと残してください。
+          </p>
+        </header>
+        <textarea
+          id="post-session-note"
+          rows="4"
+          placeholder="例：B さんの声量が小さいので次回はマイク確認を厚めに。"
+          class="w-full rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+        ></textarea>
+        <footer class="flex justify-end gap-3">
+          <button
+            id="post-session-skip"
+            type="button"
+            class="rounded-lg border border-gh-border bg-gh-bg px-5 py-2 text-sm font-semibold text-gh-text hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/40"
+          >
+            スキップ
+          </button>
+          <button
+            type="submit"
+            class="rounded-lg bg-gh-blue px-6 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/60"
+          >
+            保存
+          </button>
+        </footer>
+      </form>
+    </div>
+    <div
+      id="final-export-modal"
+      class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm overflow-y-auto"
+    >
+      <form
+        id="final-export-form"
+        class="w-full max-w-2xl space-y-6 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl ring-1 ring-black/50 my-10"
+      >
+        <header class="space-y-2">
+          <h2 class="text-xl font-semibold text-gh-text">収録データ命名＆情報出力</h2>
+          <p class="text-sm text-gh-textMuted leading-relaxed">
+            本日収録した Zoom の録画フォルダをドラッグ＆ドロップするか、下のボタンから選択してください。<br />
+            3本分の映像・音声をまとめて読み込み、RecPilot のタイムコードと突き合わせて CSV とリネーム済みファイルを生成します。
+          </p>
+        </header>
+        <div class="space-y-3 rounded-xl border border-gh-border/80 bg-gh-bg/60 px-4 py-5">
+          <h3 class="text-sm font-semibold text-gh-text">1. Zoom録画フォルダの選択</h3>
+          <label
+            for="final-export-files"
+            class="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gh-border bg-gh-bg/40 px-6 py-8 text-center text-gh-text hover:border-gh-blue/60"
+          >
+            <span class="text-lg font-semibold">フォルダをドラッグ＆ドロップ</span>
+            <span class="text-xs text-gh-textMuted">またはクリックしてフォルダを選択</span>
+            <input
+              id="final-export-files"
+              type="file"
+              class="hidden"
+              multiple
+              webkitdirectory
+              directory
+            />
+          </label>
+          <p class="text-xs text-gh-textMuted">
+            例）<code class="rounded bg-gh-bg px-1 py-0.5">2025-11-03 13.02.50 ○○様のZoomミーティング</code> というフォルダをそのまま選択してください。
+          </p>
+          <ul id="final-export-filelist" class="space-y-1 text-xs text-gh-text"></ul>
+        </div>
+        <div class="space-y-2 rounded-xl border border-gh-border/80 bg-gh-bg/60 px-4 py-5">
+          <h3 class="text-sm font-semibold text-gh-text">2. 出力に含まれる情報</h3>
+          <ul class="list-disc space-y-1 pl-5 text-xs text-gh-textMuted">
+            <li>Zoom録画ファイルを命名ルールに沿ってコピー</li>
+            <li>RecPilot のタイムコードを Zoom 開始時刻に合わせて補正</li>
+            <li>補正済み CSV と収録メモをまとめた zip ファイルを生成</li>
+          </ul>
+        </div>
+        <footer class="flex justify-end gap-3">
+          <button
+            id="final-export-cancel"
+            type="button"
+            class="rounded-lg border border-gh-border bg-gh-bg px-5 py-2 text-sm font-semibold text-gh-text hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/40"
+          >
+            キャンセル
+          </button>
+          <button
+            id="final-export-submit"
+            type="submit"
+            class="rounded-lg bg-gh-blue px-6 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/60"
+          >
+            生成する
+          </button>
+        </footer>
+      </form>
+    </div>
+    <div
+      id="zoom-share-modal"
+      class="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 px-6 py-10 backdrop-blur-sm"
+    >
+      <div class="w-full max-w-2xl space-y-6 rounded-2xl border border-gh-border bg-gh-canvas p-10 shadow-2xl ring-1 ring-black/50">
+        <header class="space-y-3 text-center">
+          <div class="flex justify-center">
+            <div class="rounded-full bg-gh-blue/20 p-4">
+              <svg class="h-16 w-16 text-gh-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+              </svg>
+            </div>
+          </div>
+          <h2 class="text-2xl font-bold text-gh-text">初めに、Zoom にてプロンプト画面を共有してください</h2>
+          <p class="text-sm text-gh-textMuted leading-relaxed">
+            参加者がプロンプト画面を見られるように、Zoom の画面共有機能でプロンプト画面を共有してください。
+          </p>
+        </header>
+        <div class="rounded-xl border border-gh-border/70 bg-gh-bg/60 px-6 py-5 space-y-3">
+          <h3 class="text-sm font-bold text-gh-text">手順:</h3>
+          <ol class="space-y-2 text-sm text-gh-textMuted list-decimal list-inside">
+            <li>ブラウザで新しいタブまたはウィンドウを開く</li>
+            <li>アドレスバーに「<code class="rounded bg-gh-bg px-2 py-0.5 text-gh-blue font-mono text-xs">localhost:5000/prompt</code>」と入力してプロンプト画面を表示</li>
+            <li>Zoom の「画面を共有」ボタンをクリック</li>
+            <li>プロンプト画面のウィンドウまたはタブを選択して共有開始</li>
+          </ol>
+        </div>
+        <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-6 py-4">
+          <p class="text-sm font-semibold text-amber-600">
+            ⚠️ 参加者はこのプロンプト画面を見ながら収録を行います。必ず共有を確認してから進んでください。
+          </p>
+        </div>
+        <footer class="flex flex-col gap-3 pt-4">
+          <p class="text-center text-base font-bold text-gh-text">共有済みですか？</p>
+          <button
+            id="zoom-share-confirm"
+            type="button"
+            class="w-full rounded-lg bg-gh-blue px-8 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/60"
+          >
+            OK
+          </button>
+        </footer>
+      </div>
+    </div>
+    <div
+      id="setup-modal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm"
+    >
+      <form
+        id="setup-form"
+        class="w-full max-w-3xl space-y-5 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-semibold text-gh-text">セッション情報を入力してください</h2>
+          <span class="text-xs font-medium text-gh-textMuted">全項目必須</span>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+            組番号
+            <input
+              id="setup-group"
+              type="text"
+              required
+              placeholder="例: 001"
+              class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+            セッション
+            <input
+              id="setup-session"
+              type="text"
+              required
+              placeholder="例: 1"
+              class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+            />
+          </label>
+        </div>
+        <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+          収録進行役（フルネーム）
+          <input
+            id="setup-director"
+            type="text"
+            required
+            placeholder="例: 佐藤 花子"
+            class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+          />
+        </label>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+            参加者A（フルネーム）
+            <input
+              id="setup-participant-a"
+              type="text"
+              required
+              placeholder="例: 鈴木 一郎"
+              class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+            参加者B（フルネーム）
+            <input
+              id="setup-participant-b"
+              type="text"
+              required
+              placeholder="例: 田中 由美"
+              class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+            />
+          </label>
+        </div>
+        <p class="rounded-lg border border-gh-border bg-gh-bg/50 px-4 py-3 text-sm text-gh-textMuted">
+          情報を登録すると RecPilot Control が表示され、入力内容は画面上部に固定表示されます。
+        </p>
+        <button
+          type="submit"
+          class="w-full rounded-lg bg-gh-blue px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+        >
+          開始する
+        </button>
+      </form>
+    </div>
+    <div
+      id="finish-modal"
+      class="fixed inset-0 z-40 hidden flex items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm"
+    >
+      <form
+        id="finish-form"
+        class="w-full max-w-3xl space-y-5 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl"
+      >
+        <div class="flex items-center justify-between">
+          <h2 class="text-xl font-semibold text-gh-text">収録を完了しますか？</h2>
+          <button
+            id="finish-cancel"
+            type="button"
+            class="rounded-full border border-gh-border px-3 py-1 text-xs font-semibold text-gh-textMuted hover:bg-gh-bg focus:outline-none focus:ring-2 focus:ring-gh-border"
+          >
+            Cancel
+          </button>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+            組番号
+            <input
+              id="finish-group"
+              type="text"
+              readonly
+              class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-textMuted focus:outline-none"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+            セッション
+            <input
+              id="finish-session"
+              type="text"
+              readonly
+              class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-textMuted focus:outline-none"
+            />
+          </label>
+        </div>
+        <fieldset class="space-y-2">
+          <legend class="text-sm font-medium text-gh-text">収録回数</legend>
+          <div class="flex flex-wrap gap-3">
+            {% for take in [1,2,3] %}
+            <label class="flex items-center gap-2 rounded-full border border-gh-border px-3 py-1 text-sm text-gh-text hover:border-gh-blue">
+              <input type="radio" name="finish-take" value="{{ take }}" {% if take == 1 %}checked{% endif %} />
+              {{ take }}回目
+            </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+          所感・メモ
+          <textarea
+            id="finish-summary"
+            rows="4"
+            placeholder="収録の所感や引き継ぎメモを入力してください。"
+            class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text placeholder-gh-textMuted focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+          ></textarea>
+        </label>
+        <p class="rounded-lg border border-gh-border bg-gh-bg/50 px-4 py-3 text-sm text-gh-textMuted">
+          出力ボタンを押すと、タイムコード付きメモと所感をまとめた CSV が「組_セッション_takeX.csv」という名前でダウンロードされます。Premiere Pro のマーカーインポートで利用できる形式です。
+        </p>
+        <button
+          type="submit"
+          class="w-full rounded-lg bg-gh-green px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gh-green/50"
+        >
+          Export CSV
+        </button>
+      </form>
+    </div>
+    <div
+      id="settings-modal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm overflow-y-auto"
+    >
+      <div class="w-full max-w-4xl space-y-5 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl my-10">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-xl font-semibold text-gh-text">設定</h2>
+          <button
+            id="settings-cancel"
+            type="button"
+            class="rounded-full border border-gh-border px-3 py-1 text-xs font-semibold text-gh-textMuted hover:bg-gh-bg focus:outline-none focus:ring-2 focus:ring-gh-border"
+          >
+            閉じる
+          </button>
+        </div>
+
+        <!-- タブナビゲーション -->
+        <div class="flex flex-wrap gap-2 border-b border-gh-border pb-4">
+          <button type="button" class="settings-tab active rounded-lg bg-gh-blue px-4 py-2 text-sm font-bold text-white transition-all hover:bg-gh-blueDark focus:outline-none" data-tab="timer">
+            タイマー設定
+          </button>
+          <button type="button" class="settings-tab rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-bold text-gh-text transition-all hover:border-gh-blue focus:outline-none" data-tab="themes">
+            トークテーマ管理
+          </button>
+          <button type="button" class="settings-tab rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-bold text-gh-text transition-all hover:border-gh-blue focus:outline-none" data-tab="messages">
+            固定メッセージ
+          </button>
+          <button type="button" class="settings-tab rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-bold text-gh-text transition-all hover:border-gh-blue focus:outline-none" data-tab="categories">
+            記録カテゴリ
+          </button>
+          <button type="button" class="settings-tab rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-bold text-gh-text transition-all hover:border-gh-blue focus:outline-none" data-tab="attention">
+            画面注目設定
+          </button>
+        </div>
+
+        <!-- タイマー設定タブ -->
+        <div id="tab-timer" class="settings-tab-content">
+          <form id="settings-form" class="space-y-5">
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+                セッション長（分）
+                <input
+                  id="settings-duration"
+                  type="number"
+                  min="1"
+                  max="240"
+                  step="1"
+                  required
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+                開始カウントダウン（秒）
+                <input
+                  id="settings-start-countdown"
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                  required
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+                終了カウントダウン（秒）
+                <input
+                  id="settings-finish-countdown"
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                  required
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+                終了メッセージ表示時間（秒）
+                <input
+                  id="settings-finish-hold"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  required
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+                休憩時間（分）
+                <input
+                  id="settings-break-duration"
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  required
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+              </label>
+            </div>
+            <p class="rounded-lg border border-gh-border bg-gh-bg/50 px-4 py-3 text-sm text-gh-textMuted">
+              設定はブラウザに保存され、タイマーが停止中のときのみ変更できます。変更後はタイマーがリセットされます。
+            </p>
+            <div class="flex gap-2">
+              <button
+                id="settings-reset"
+                type="button"
+                class="rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-semibold text-gh-text hover:border-gh-red focus:outline-none focus:ring-2 focus:ring-gh-red/50"
+              >
+                デフォルトに戻す
+              </button>
+              <button
+                type="submit"
+                class="flex-1 rounded-lg bg-gh-blue px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                設定を保存
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- トークテーマ管理タブ -->
+        <div id="tab-themes" class="settings-tab-content hidden">
+          <div class="space-y-5">
+            <div class="rounded-lg border border-gh-border bg-gh-bg/50 p-4">
+              <h3 class="mb-3 text-sm font-bold text-gh-text">CSVフォーマット説明</h3>
+              <pre class="overflow-x-auto rounded bg-gh-bg p-3 text-xs text-gh-textMuted">No,カテゴリ,テーマ内容,基本ヒント,追加ヒント1,追加ヒント2,対応マーク
+1,食べ物全般,好きな食べ物,何が好き？|理由は？,いつ食べる？,どこで食べる？,
+2,食べ物全般,嫌いな食べ物,何が嫌い？|理由は？,食べられる？,未成年</pre>
+              <p class="mt-2 text-xs text-gh-textMuted">
+                ※ヒントは「|」で区切ります<br>
+                ※対応マークは「未成年」「個人情報」が使用可能
+              </p>
+            </div>
+            <div class="rounded-lg border border-gh-border bg-amber-500/10 p-4">
+              <p class="text-sm font-bold text-amber-600">⚠️ 管理者専用機能</p>
+              <p class="mt-1 text-xs text-gh-textMuted">
+                トークテーマの再読み込みは、管理者パスワードが必要です。誤操作を防ぐため、慎重に実行してください。
+              </p>
+            </div>
+            <div class="space-y-3">
+              <label class="flex flex-col gap-1 text-sm font-medium text-gh-text">
+                管理者パスワード
+                <input
+                  id="admin-password"
+                  type="password"
+                  placeholder="パスワードを入力"
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+              </label>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="reset-theme-history" class="h-4 w-4 rounded border-gh-border text-gh-blue focus:ring-gh-blue">
+                <label for="reset-theme-history" class="text-sm text-gh-text cursor-pointer">使用済みテーマ履歴もリセットする</label>
+              </div>
+            </div>
+            <button
+              id="reload-themes-btn"
+              type="button"
+              class="w-full rounded-lg bg-gh-green px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gh-green/50"
+            >
+              トークテーマCSVを再読み込み
+            </button>
+          </div>
+        </div>
+
+        <!-- 固定メッセージタブ -->
+        <div id="tab-messages" class="settings-tab-content hidden">
+          <div class="space-y-5">
+            <div class="rounded-lg border border-gh-border bg-gh-bg/50 p-4">
+              <h3 class="mb-2 text-sm font-bold text-gh-text">固定メッセージについて</h3>
+              <p class="text-xs text-gh-textMuted">
+                カンペ送信セクションに表示される定型メッセージを管理できます。<br>
+                メッセージは最大10件まで登録可能で、並び順を変更できます。
+              </p>
+            </div>
+
+            <!-- メッセージリスト -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-gh-text">登録済みメッセージ</h3>
+                <span id="canned-message-count" class="text-xs text-gh-textMuted">0 / 10 件</span>
+              </div>
+              <div id="canned-messages-list" class="space-y-2 rounded-lg border border-gh-border bg-gh-bg/30 p-3 min-h-[200px]">
+                <!-- JavaScript で動的生成 -->
+              </div>
+            </div>
+
+            <!-- 新規メッセージ追加 -->
+            <div class="space-y-3">
+              <h3 class="text-sm font-bold text-gh-text">新しいメッセージを追加</h3>
+              <div class="flex gap-2">
+                <input
+                  id="new-canned-message-input"
+                  type="text"
+                  placeholder="メッセージを入力（例：声が遠いようなので、もう少しマイクに近づいてください）"
+                  maxlength="200"
+                  class="flex-1 rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+                <button
+                  id="add-canned-message-btn"
+                  type="button"
+                  class="rounded-lg bg-gh-blue px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+
+            <!-- アクションボタン -->
+            <div class="flex gap-2 border-t border-gh-border pt-4">
+              <button
+                id="reset-canned-messages-btn"
+                type="button"
+                class="rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-semibold text-gh-text hover:border-gh-red hover:text-gh-red focus:outline-none focus:ring-2 focus:ring-gh-red/50"
+              >
+                デフォルトに戻す
+              </button>
+              <button
+                id="save-canned-messages-btn"
+                type="button"
+                class="flex-1 rounded-lg bg-gh-blue px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                変更を保存
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 記録カテゴリタブ -->
+        <div id="tab-categories" class="settings-tab-content hidden">
+          <div class="space-y-5">
+            <div class="rounded-lg border border-gh-border bg-gh-bg/50 p-4">
+              <h3 class="mb-2 text-sm font-bold text-gh-text">記録カテゴリについて</h3>
+              <p class="text-xs text-gh-textMuted">
+                収録中の記録・メモ機能で使用するカテゴリを管理できます。<br>
+                カテゴリは最大10件まで登録可能で、並び順を変更できます。
+              </p>
+            </div>
+
+            <!-- カテゴリリスト -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-bold text-gh-text">登録済みカテゴリ</h3>
+                <span id="report-category-count" class="text-xs text-gh-textMuted">0 / 10 件</span>
+              </div>
+              <div id="report-categories-list" class="space-y-2 rounded-lg border border-gh-border bg-gh-bg/30 p-3 min-h-[200px]">
+                <!-- JavaScript で動的生成 -->
+              </div>
+            </div>
+
+            <!-- 新規カテゴリ追加 -->
+            <div class="space-y-3">
+              <h3 class="text-sm font-bold text-gh-text">新しいカテゴリを追加</h3>
+              <div class="flex gap-2">
+                <input
+                  id="new-report-category-input"
+                  type="text"
+                  placeholder="カテゴリを入力（例：音声トラブル、演出メモ）"
+                  maxlength="50"
+                  class="flex-1 rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+                <button
+                  id="add-report-category-btn"
+                  type="button"
+                  class="rounded-lg bg-gh-blue px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+
+            <!-- アクションボタン -->
+            <div class="flex gap-2 border-t border-gh-border pt-4">
+              <button
+                id="reset-report-categories-btn"
+                type="button"
+                class="rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-semibold text-gh-text hover:border-gh-red hover:text-gh-red focus:outline-none focus:ring-2 focus:ring-gh-red/50"
+              >
+                デフォルトに戻す
+              </button>
+              <button
+                id="save-report-categories-btn"
+                type="button"
+                class="flex-1 rounded-lg bg-gh-blue px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                変更を保存
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 画面注目設定タブ -->
+        <div id="tab-attention" class="settings-tab-content hidden">
+          <div class="space-y-5">
+            <div class="rounded-lg border border-gh-border bg-gh-bg/50 p-4">
+              <h3 class="mb-2 text-sm font-bold text-gh-text">画面注目機能について</h3>
+              <p class="text-xs text-gh-textMuted">
+                発話者が画面を見ていない時に、全画面で注意を促す機能の設定です。<br>
+                表示時間やメッセージをカスタマイズできます。
+              </p>
+            </div>
+
+            <div class="space-y-4">
+              <label class="flex flex-col gap-2 text-sm font-bold text-gh-text">
+                表示時間（秒）
+                <input
+                  id="attention-duration"
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value="3"
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+                <span class="text-xs text-gh-textMuted">画面注目アラートが表示される秒数（1〜10秒）</span>
+              </label>
+
+              <label class="flex flex-col gap-2 text-sm font-bold text-gh-text">
+                表示メッセージ
+                <input
+                  id="attention-message"
+                  type="text"
+                  maxlength="50"
+                  value="画面に注目してください"
+                  class="rounded-lg border border-gh-border bg-gh-bg px-3 py-2 text-sm text-gh-text focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                />
+                <span class="text-xs text-gh-textMuted">Prompt画面に表示されるメッセージ（最大50文字）</span>
+              </label>
+            </div>
+
+            <div class="flex gap-2 border-t border-gh-border pt-4">
+              <button
+                id="reset-attention-settings-btn"
+                type="button"
+                class="rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-sm font-semibold text-gh-text hover:border-gh-red hover:text-gh-red focus:outline-none focus:ring-2 focus:ring-gh-red/50"
+              >
+                デフォルトに戻す
+              </button>
+              <button
+                id="save-attention-settings-btn"
+                type="button"
+                class="flex-1 rounded-lg bg-gh-blue px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                変更を保存
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-8">
+      <header class="flex flex-col gap-6">
+        <div class="flex items-end justify-between">
+          <div class="flex flex-col gap-2">
+            <div class="flex items-baseline gap-3">
+              <h1 class="bg-gradient-to-r from-gh-blue via-gh-purple to-gh-pink bg-clip-text text-4xl font-bold tracking-tight text-transparent">
+                RecPilot Control
+              </h1>
+              <span class="rounded-full bg-gh-blue/15 px-3 py-0.5 text-xs font-bold text-gh-blue border border-gh-blue/20">
+                v2.0
+              </span>
+            </div>
+            <p class="text-sm font-medium text-gh-textMuted">
+              プロフェッショナル収録管理システム
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="rounded-xl border border-gh-border bg-gh-canvas px-4 py-2.5 shadow-sm">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="font-semibold text-gh-textMuted">テーマ総数</span>
+                <span id="theme-total-header" class="text-lg font-bold text-gh-blue">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-gh-border bg-gh-canvas p-6 shadow-md">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="grid grid-cols-2 gap-x-8 gap-y-4 lg:grid-cols-4">
+              <div class="flex flex-col gap-1.5">
+                <span class="text-xs font-bold uppercase tracking-wider text-gh-textMuted">組</span>
+                <span id="summary-group" class="text-base font-bold text-gh-text">--</span>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-xs font-bold uppercase tracking-wider text-gh-textMuted">セッション</span>
+                <span id="summary-session" class="text-base font-bold text-gh-text">--</span>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-xs font-bold uppercase tracking-wider text-gh-textMuted">進行</span>
+                <span id="summary-director" class="text-base font-bold text-gh-text">--</span>
+              </div>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-xs font-bold uppercase tracking-wider text-gh-textMuted">参加者</span>
+                <span id="summary-participants" class="text-base font-bold text-gh-text">--</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                id="open-setup"
+                type="button"
+                class="rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-xs font-bold text-gh-text shadow-sm transition-all hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+              >
+                情報を編集
+              </button>
+              <button
+                id="open-settings"
+                type="button"
+                class="rounded-lg border border-gh-blue bg-gh-blue px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                設定
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div class="flex flex-col gap-6">
+          <div class="group relative overflow-hidden rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-lg">
+            <div class="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br from-gh-blue/10 to-gh-purple/10 blur-3xl"></div>
+            <div class="relative flex flex-col gap-8">
+              <div class="flex flex-col items-center gap-6 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 p-8 shadow-xl border-2 border-slate-600/50">
+                <div class="flex flex-col items-center gap-3">
+                  <div id="timer-display" class="font-mono text-7xl font-black tabular-nums tracking-tighter text-white drop-shadow-lg sm:text-8xl">
+                    {{ "%02d:%02d:%02d"|format(duration_seconds//3600, (duration_seconds%3600)//60, duration_seconds%60) }}
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div id="timer-status" class="text-sm font-bold uppercase tracking-wider text-slate-300">待機中</div>
+                    <span class="text-slate-500">•</span>
+                    <span
+                      id="session-length-label"
+                      class="rounded-full bg-slate-600/50 px-3 py-1 text-xs font-bold text-slate-200 backdrop-blur-sm"
+                      >セッション長: 60分</span
+                    >
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  id="start-btn"
+                  type="button"
+                  class="group/btn relative overflow-hidden rounded-lg bg-green-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                >
+                  <span class="relative z-10 flex items-center gap-2">
+                    <span class="text-base">▶</span>
+                    開始
+                  </span>
+                </button>
+                <button
+                  id="stop-btn"
+                  type="button"
+                  class="rounded-lg bg-yellow-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500/50"
+                >
+                  <span class="flex items-center gap-2">
+                    <span class="text-base">⏸</span>
+                    一時停止
+                  </span>
+                </button>
+                <button
+                  id="reset-btn"
+                  type="button"
+                  class="rounded-lg border-2 border-gh-border bg-gh-bg px-6 py-3 text-sm font-bold text-gh-text shadow-md transition-all hover:scale-105 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
+                >
+                  リセット
+                </button>
+                <button
+                  id="break-btn"
+                  type="button"
+                  class="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                >
+                  休憩
+                </button>
+                <button
+                  id="break-cancel-btn"
+                  type="button"
+                  class="hidden rounded-lg bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                >
+                  休憩中止
+                </button>
+                <button
+                  id="export-summary-btn"
+                  type="button"
+                  class="rounded-lg border-2 border-gh-border bg-gh-canvas px-6 py-3 text-sm font-bold text-gh-text shadow-md transition-all hover:scale-105 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
+                >
+                  収録データ命名＆情報出力
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="group relative overflow-hidden rounded-2xl border border-gh-border bg-gh-canvas p-6 shadow-xl">
+            <div class="absolute -left-20 -bottom-20 h-40 w-40 rounded-full bg-gradient-to-br from-gh-blue/10 to-gh-purple/10 blur-3xl"></div>
+            <div class="relative flex flex-col gap-5">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex-1">
+                  <div class="mb-3 flex items-baseline gap-3">
+                    <h3 class="bg-gradient-to-r from-gh-blue to-gh-purple bg-clip-text text-2xl font-bold text-transparent">
+                      トークテーマ
+                    </h3>
+                    <div class="flex items-center gap-2">
+                      <div class="rounded-lg border border-gh-border bg-gh-bg px-3 py-1 shadow-sm">
+                        <span class="text-xs font-bold text-gh-text">
+                          <span id="theme-total" class="text-gh-blue">-</span> 件
+                        </span>
+                      </div>
+                      <div class="rounded-lg border border-gh-border bg-gh-bg px-3 py-1 shadow-sm">
+                        <span class="text-xs font-bold text-gh-text">
+                          未使用 <span id="theme-remaining" class="text-gh-blue">-</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="text-xs font-medium text-gh-textMuted">カテゴリから選ぶと詳細パネルが開きます。使用済みテーマはグレー表示になります。</p>
+                </div>
+                <button
+                  id="toggle-theme-panel"
+                  type="button"
+                  class="group/toggle flex items-center gap-3 rounded-full bg-gh-blue px-7 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-[1.03] hover:bg-gh-blueDark focus:outline-none focus:ring-4 focus:ring-gh-blue/20"
+                >
+                  <span id="theme-panel-indicator-icon" class="text-lg leading-none transition-transform group-hover/toggle:scale-110">▼</span>
+                  <span id="theme-panel-indicator" class="tracking-wide">開く</span>
+                </button>
+              </div>
+              <div
+                id="theme-category-grid"
+                class="grid gap-4 rounded-xl border border-gh-border bg-gh-bg p-5 shadow-inner hidden"
+                style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));"
+              ></div>
+            </div>
+            <div class="relative mt-5 overflow-hidden rounded-2xl border border-gh-border bg-gh-bg p-6 shadow-lg">
+              <div class="absolute right-0 top-0 h-32 w-32 rounded-full bg-gradient-to-br from-gh-blue/10 to-transparent blur-2xl"></div>
+              <div class="relative flex flex-col gap-4">
+                <div class="flex items-center gap-2">
+                  <span id="theme-preview-category" class="rounded-md border border-gh-border bg-gh-canvas px-2 py-1 text-xs font-black uppercase tracking-widest text-gh-textMuted"
+                    >カテゴリ未選択</span
+                  >
+                  <div id="theme-preview-alerts" class="hidden flex flex-wrap gap-1.5"></div>
+                </div>
+                <h3 id="theme-preview-title" class="bg-gradient-to-r from-gh-blue to-gh-purple bg-clip-text text-3xl font-black leading-tight text-transparent">
+                  テーマが選択されていません
+                </h3>
+                <p class="text-sm font-medium leading-relaxed text-gh-textMuted">
+                  カテゴリボタンを押してテーマを選択すると、ここに詳細とヒントが表示され、Prompt画面にも反映されます。
+                </p>
+                <ul id="theme-preview-hints" class="flex flex-col gap-2 text-sm font-medium text-gh-text"></ul>
+
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <button
+                    id="hint-base-btn"
+                    type="button"
+                    class="rounded-lg bg-gh-blue px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:scale-105 hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/40"
+                  >
+                    基本ヒント
+                  </button>
+                  <button
+                    id="hint-extra1-btn"
+                    type="button"
+                    class="rounded-lg bg-gh-purple px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:scale-105 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gh-purple/40"
+                  >
+                    ヒント1
+                  </button>
+                  <button
+                    id="hint-extra2-btn"
+                    type="button"
+                    class="rounded-lg bg-gh-pink px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:scale-105 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gh-pink/40"
+                  >
+                    ヒント2
+                  </button>
+                </div>
+              </div>
+              <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-gh-border pt-5">
+                <button
+                  id="theme-history-button"
+                  type="button"
+                  class="rounded-lg border border-gh-border bg-gh-canvas px-3.5 py-2 text-xs font-bold text-gh-text shadow-sm transition-all hover:scale-105 hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+                >
+                  使用済みテーマ一覧
+                </button>
+                <button
+                  id="theme-clear-button"
+                  type="button"
+                  class="rounded-lg border border-gh-red bg-gh-canvas px-3.5 py-2 text-xs font-bold text-gh-red shadow-sm transition-all hover:scale-105 hover:bg-gh-red/10 focus:outline-none focus:ring-2 focus:ring-gh-red/50"
+                >
+                  表示をクリア
+                </button>
+                <span id="theme-selection-meta" class="ml-auto text-xs font-semibold text-gh-textMuted">現在のテーマ: --</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-gh-border bg-gh-canvas p-6 shadow-xl">
+            <div class="mb-5">
+              <h2 class="bg-gradient-to-r from-gh-blue to-gh-purple bg-clip-text text-xl font-bold text-transparent">固定メッセージ ＆ 任意メッセージ</h2>
+              <p class="mt-1 text-xs font-medium text-gh-textMuted">
+                ボタンを押すと Prompt 画面に即時表示されます。必要に応じて任意メッセージも入力可能です。
+              </p>
+            </div>
+
+            <!-- 固定メッセージボタン -->
+            <div class="mb-4">
+              <div class="mb-2 text-sm font-bold text-gh-text">固定メッセージ</div>
+              <div id="prompt-buttons" class="grid gap-2 sm:grid-cols-2"></div>
+            </div>
+
+            <!-- 固定メッセージ用の参加者チェックボックスとモーダル -->
+            <div id="canned-message-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6 py-10 backdrop-blur-sm">
+              <div class="w-full max-w-lg space-y-4 rounded-2xl border border-gh-border bg-gh-canvas p-8 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-gh-border pb-4">
+                  <h3 class="text-lg font-bold text-gh-text">メッセージを送信</h3>
+                  <button id="canned-message-close" type="button" class="rounded-full border border-gh-border px-3 py-1 text-xs font-semibold text-gh-textMuted hover:bg-gh-bg">
+                    キャンセル
+                  </button>
+                </div>
+                <div class="rounded-lg border border-gh-border bg-gh-bg p-4">
+                  <p id="canned-message-preview" class="text-sm font-medium text-gh-text"></p>
+                </div>
+                <div class="rounded-xl border border-gh-border bg-gh-bg p-4">
+                  <div class="mb-2 text-xs font-bold text-gh-text">宛先を指定（任意）</div>
+                  <div class="flex gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="canned-check-a" class="h-4 w-4 rounded border-gh-border text-gh-blue focus:ring-gh-blue">
+                      <span id="canned-label-a" class="text-sm font-semibold text-gh-text">参加者A</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="canned-check-b" class="h-4 w-4 rounded border-gh-border text-gh-blue focus:ring-gh-blue">
+                      <span id="canned-label-b" class="text-sm font-semibold text-gh-text">参加者B</span>
+                    </label>
+                  </div>
+                </div>
+                <button id="canned-message-send" type="button" class="w-full rounded-lg bg-gh-blue px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50">
+                  送信
+                </button>
+              </div>
+            </div>
+
+            <!-- 任意メッセージ入力 -->
+            <div class="mt-4 flex flex-col gap-2 md:flex-row">
+              <input
+                id="custom-prompt"
+                type="text"
+                placeholder="任意のメッセージを入力..."
+                class="flex-1 rounded-lg border-2 border-gh-border bg-gh-bg px-4 py-3 text-sm font-medium text-gh-text placeholder-gh-textMuted shadow-sm transition-all focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/20"
+              />
+              <button
+                id="send-custom-prompt"
+                type="button"
+                class="rounded-lg bg-gh-blue px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                送信
+              </button>
+              <button
+                id="clear-prompt"
+                type="button"
+                class="rounded-lg border-2 border-gh-border bg-gh-bg px-6 py-3 text-sm font-bold text-gh-text shadow-md transition-all hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+              >
+                表示クリア
+              </button>
+            </div>
+
+            <!-- 画面注目ボタン -->
+            <div class="mt-4">
+              <button
+                id="screen-attention-btn"
+                type="button"
+                class="w-full rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 text-base font-bold text-white shadow-xl transition-all hover:scale-[1.02] hover:from-amber-400 hover:to-orange-400 focus:outline-none focus:ring-4 focus:ring-amber-400/50"
+              >
+                <div class="flex items-center justify-center gap-3">
+                  <span class="text-2xl">⚠️</span>
+                  <span>画面注目</span>
+                  <span class="text-xs font-normal opacity-80">（発話者が気づかない時）</span>
+                </div>
+              </button>
+            </div>
+
+            <!-- パターン別メッセージ -->
+            <div class="mt-5 border-t border-gh-border pt-5">
+              <div class="flex items-start justify-between gap-4 mb-4">
+                <div class="flex-1">
+                  <h3 class="text-lg font-bold text-gh-text">パターン別メッセージ</h3>
+                  <p class="mt-1 text-xs font-medium text-gh-textMuted">シーン別の定型メッセージを選択できます。参加者を指定することもできます。</p>
+                </div>
+                <button
+                  id="toggle-template-panel"
+                  type="button"
+                  class="group/toggle flex items-center gap-3 rounded-full bg-gh-blue px-7 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-[1.03] hover:bg-gh-blueDark focus:outline-none focus:ring-4 focus:ring-gh-blue/20"
+                >
+                  <span id="template-panel-indicator-icon" class="text-lg leading-none transition-transform group-hover/toggle:scale-110">▼</span>
+                  <span id="template-panel-indicator" class="tracking-wide">開く</span>
+                </button>
+              </div>
+              <div
+                id="template-category-grid"
+                class="grid gap-3 rounded-xl border border-gh-border bg-gh-bg p-5 shadow-inner hidden"
+                style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));"
+              ></div>
+            </div>
+
+            <!-- リアクションパレット -->
+            <div class="mt-5 border-t border-gh-border pt-5">
+              <div class="mb-3 flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-gh-text">リアクション</span>
+                <span class="text-xs text-gh-textMuted">会話を盛り上げる</span>
+              </div>
+              <div id="reaction-buttons" class="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-900/20 to-yellow-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-amber-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400/50" data-reaction="👍" data-label="いいね！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">👍</span>
+                    <span class="text-[0.65rem] font-semibold text-amber-400">いいね！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-900/20 to-teal-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-emerald-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400/50" data-reaction="👏" data-label="すごい！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">👏</span>
+                    <span class="text-[0.65rem] font-semibold text-emerald-400">すごい！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-rose-500/30 bg-gradient-to-br from-rose-900/20 to-pink-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-rose-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-rose-400/50" data-reaction="😆" data-label="ウケる！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">😆</span>
+                    <span class="text-[0.65rem] font-semibold text-rose-400">ウケる！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-blue-500/30 bg-gradient-to-br from-blue-900/20 to-indigo-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-blue-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400/50" data-reaction="💡" data-label="なるほど！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">💡</span>
+                    <span class="text-[0.65rem] font-semibold text-blue-400">なるほど！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-900/20 to-violet-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-purple-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-400/50" data-reaction="😮" data-label="知らなかった！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">😮</span>
+                    <span class="text-[0.65rem] font-semibold text-purple-400">知らなかった！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-900/20 to-amber-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-orange-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400/50" data-reaction="🤔" data-label="気になる！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">🤔</span>
+                    <span class="text-[0.65rem] font-semibold text-orange-400">気になる！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-pink-500/30 bg-gradient-to-br from-pink-900/20 to-rose-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-pink-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-pink-400/50" data-reaction="❤️" data-label="共感！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">❤️</span>
+                    <span class="text-[0.65rem] font-semibold text-pink-400">共感！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-yellow-500/30 bg-gradient-to-br from-yellow-900/20 to-amber-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-yellow-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-yellow-400/50" data-reaction="✨" data-label="さすが！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">✨</span>
+                    <span class="text-[0.65rem] font-semibold text-yellow-400">さすが！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-900/20 to-teal-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-cyan-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-400/50" data-reaction="🎉" data-label="おめでとう！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">🎉</span>
+                    <span class="text-[0.65rem] font-semibold text-cyan-400">おめでとう！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-indigo-500/30 bg-gradient-to-br from-indigo-900/20 to-blue-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-indigo-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400/50" data-reaction="👌" data-label="OK！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">👌</span>
+                    <span class="text-[0.65rem] font-semibold text-indigo-400">OK！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-lime-500/30 bg-gradient-to-br from-lime-900/20 to-green-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-lime-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-lime-400/50" data-reaction="🙌" data-label="詳しく聞きたい！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">🙌</span>
+                    <span class="text-[0.65rem] font-semibold text-lime-400 leading-tight">詳しく<br>聞きたい！</span>
+                  </div>
+                </button>
+                <button type="button" class="reaction-btn group relative overflow-hidden rounded-xl border-2 border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-900/20 to-pink-900/20 px-2 py-3 shadow-sm transition-all hover:scale-110 hover:border-fuchsia-400/50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-fuchsia-400/50" data-reaction="⭐" data-label="そうなんだ！">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-2xl transition-transform group-hover:scale-125">⭐</span>
+                    <span class="text-[0.65rem] font-semibold text-fuchsia-400 leading-tight">そうなんだ！</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-lg border border-gh-border bg-gh-bg px-4 py-3 shadow-sm">
+              <span class="text-xs font-semibold text-gh-textMuted">最終送信:</span>
+              <span id="last-prompt" class="ml-2 font-bold text-gh-text">未送信</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-6">
+          <div class="rounded-2xl border border-gh-border bg-gh-canvas p-6 shadow-xl">
+            <div class="mb-5">
+              <h2 class="bg-gradient-to-r from-gh-green to-gh-blue bg-clip-text text-xl font-bold text-transparent">タイムコード付きメモ</h2>
+              <p class="mt-1 text-xs font-medium text-gh-textMuted">
+                記録カテゴリを選んで<strong>「タイムコードを記録」</strong>を押すだけでも保存されます。必要なら詳細メモを追加してください。
+              </p>
+            </div>
+            <form id="note-form" class="flex flex-col gap-4">
+              <label class="flex flex-col gap-2 text-sm font-bold text-gh-text">
+                記録カテゴリ
+                <select
+                  id="select-category"
+                  class="rounded-lg border-2 border-gh-border bg-gh-bg px-4 py-3 text-sm font-medium text-gh-text shadow-sm transition-all focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/20"
+                >
+                  <option value="" disabled selected>カテゴリを選択</option>
+                  {% for category in categories %}
+                  <option value="{{ category }}">{{ category }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label
+                id="category-other-wrapper"
+                class="hidden flex-col gap-2 text-sm font-bold text-gh-text"
+              >
+                カテゴリ名（カスタム）
+                <input
+                  id="input-category-other"
+                  type="text"
+                  placeholder="自由入力（例: 接続テスト）"
+                  class="rounded-lg border-2 border-gh-border bg-gh-bg px-4 py-3 text-sm font-medium text-gh-text placeholder-gh-textMuted shadow-sm transition-all focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/20"
+                />
+              </label>
+              <div class="flex flex-col gap-2">
+                <button
+                  id="capture-note"
+                  type="button"
+                  class="rounded-lg bg-gh-green px-6 py-3 text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gh-green/50"
+                >
+                  タイムコードを記録
+                </button>
+                <button
+                  id="toggle-content"
+                  type="button"
+                  class="w-fit rounded-lg border border-gh-border bg-gh-bg px-3 py-1.5 text-xs font-bold text-gh-text shadow-sm transition-all hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/50"
+                >
+                  詳細メモ欄を開く
+                </button>
+              </div>
+              <div id="content-wrapper" class="hidden">
+                <label class="flex flex-col gap-2 text-sm font-bold text-gh-text">
+                  詳細メモ（任意）
+                  <textarea
+                    id="input-content"
+                    rows="3"
+                    placeholder="必要に応じて詳細を入力してください"
+                    class="rounded-lg border-2 border-gh-border bg-gh-bg px-4 py-3 text-sm font-medium text-gh-text placeholder-gh-textMuted shadow-sm transition-all focus:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/20"
+                  ></textarea>
+                </label>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gh-border bg-gh-bg px-4 py-3 shadow-sm">
+                <div class="text-sm font-semibold text-gh-text">
+                  現在のタイムコード: <span id="current-timecode" class="font-mono text-lg font-black tabular-nums text-gh-green">--:--:--</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    id="cancel-note"
+                    type="button"
+                    class="hidden rounded-lg border-2 border-gh-border bg-gh-bg px-4 py-2 text-sm font-bold text-gh-text shadow-md transition-all hover:border-gh-red focus:outline-none focus:ring-2 focus:ring-gh-red/50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    id="note-action-btn"
+                    type="submit"
+                    class="rounded-lg bg-gh-green px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gh-green/50"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div class="flex-1 overflow-hidden rounded-2xl border border-gh-border bg-gh-canvas p-6 shadow-xl">
+            <div class="mb-4">
+              <h2 class="bg-gradient-to-r from-gh-blue to-gh-purple bg-clip-text text-xl font-bold text-transparent">記録履歴</h2>
+              <p class="mt-1 text-xs font-medium text-gh-textMuted">このセッションで記録したメモが一覧表示されます。</p>
+            </div>
+            <div class="mt-4 max-h-64 overflow-y-auto rounded-lg border border-gh-border bg-gh-bg">
+              <table class="min-w-full table-fixed border-collapse text-left text-xs sm:text-sm">
+                <thead class="sticky top-0 bg-gh-canvas border-b border-gh-border">
+                  <tr class="text-gh-text">
+                    <th class="w-24 border-b-2 border-gh-border px-3 py-3 text-xs font-bold uppercase tracking-wider">タイムコード</th>
+                    <th class="w-20 border-b-2 border-gh-border px-3 py-3 text-xs font-bold uppercase tracking-wider">組</th>
+                    <th class="w-16 border-b-2 border-gh-border px-3 py-3 text-xs font-bold uppercase tracking-wider">S</th>
+                    <th class="border-b-2 border-gh-border px-3 py-3 text-xs font-bold uppercase tracking-wider">内容</th>
+                    <th class="w-28 border-b-2 border-gh-border px-3 py-3 text-xs font-bold uppercase tracking-wider">カテゴリ</th>
+                  </tr>
+                </thead>
+                <tbody id="notes-table" class="divide-y divide-gh-border bg-gh-bg"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.APP_CONFIG = {
+        durationSeconds: {{ duration_seconds|int }},
+        cannedPrompts: {{ canned_prompts|tojson }},
+        totalThemes: {{ total_themes|int }},
+        categories: {{ categories|tojson }},
+      };
+    </script>
+    <div
+      id="theme-popover"
+      class="pointer-events-none fixed left-0 top-0 z-50 hidden w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-2xl bg-gh-canvas/95 p-4 shadow-2xl ring-1 ring-gh-border backdrop-blur"
+    ></div>
+    <div
+      id="template-popover"
+      class="pointer-events-none fixed left-0 top-0 z-50 hidden w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-gh-canvas/95 p-6 shadow-2xl ring-1 ring-gh-border backdrop-blur"
+    ></div>
+    <script src="{{ url_for('static', filename='js/control.js') }}"></script>
+  </body>
+</html>

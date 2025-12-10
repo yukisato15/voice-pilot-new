@@ -1,0 +1,62 @@
+{
+  "name": "zoom-duo-recorder",
+  "version": "0.1.0",
+  "description": "Zoom Duo Recorder desktop app (Electron + React + TypeScript)",
+  "author": "Voice Pilot Team",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/main/app.js",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:main\" \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:main": "tsc -w --project tsconfig.json",
+    "dev:renderer": "vite --config vite.renderer.config.mts",
+    "dev:electron": "wait-on tcp:5173 dist/main/app.js && env -u ELECTRON_RUN_AS_NODE cross-env NODE_ENV=development electron .",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:renderer": "vite build --config vite.renderer.config.mts",
+    "build:main": "tsc -p tsconfig.json",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "typecheck": "tsc --noEmit",
+    "start": "env -u ELECTRON_RUN_AS_NODE cross-env NODE_ENV=production electron .",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.0",
+    "electron-store": "^8.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
+    "eslint": "^9.5.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.34.3",
+    "rimraf": "^5.0.7",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.8",
+    "wait-on": "^7.0.1"
+  },
+  "build": {
+    "appId": "com.voicepilot.zoomduorecorder",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

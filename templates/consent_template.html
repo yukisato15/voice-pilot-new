@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Zoom Duo Recorder 同意書</title>
+  <style>
+    body { font-family: Arial, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; margin: 40px; line-height: 1.6; }
+    h1 { font-size: 20px; text-align: center; margin-bottom: 24px; }
+    h2 { font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 4px; margin-top: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #999; padding: 8px; font-size: 12px; }
+    .signature { margin-top: 40px; }
+    .signature td { height: 48px; }
+    .notes { font-size: 11px; color: #555; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>収録およびアップロードに関する同意書</h1>
+
+  <p>以下の内容をご確認のうえ、同意欄にチェックを入れてください。署名欄には記入者情報と時刻が自動挿入されます。</p>
+
+  <h2>収録情報</h2>
+  <table>
+    <tr><th>参加者名</th><td>{{ participant_name }}</td></tr>
+    <tr><th>会議 ID</th><td>{{ meeting_id }}</td></tr>
+    <tr><th>日時</th><td>{{ timestamp }}</td></tr>
+    <tr><th>アプリバージョン</th><td>{{ app_version }}</td></tr>
+  </table>
+
+  <h2>目的・利用範囲</h2>
+  <p>{{ purpose }}</p>
+
+  <h2>保存期間・第三者提供</h2>
+  <ul>
+    <li>保存期間: {{ retention_period }}</li>
+    <li>第三者提供: {{ third_party_policy }}</li>
+    <li>再同意撤回方法: {{ revoke_method }}</li>
+  </ul>
+
+  <h2>同意事項</h2>
+  <table>
+    <tr><th>ヘッドホン装着 / スピーカー OFF</th><td>{{ '✔' if checks.headphones else '✕' }}</td></tr>
+    <tr><th>ローカル録画を使用する</th><td>{{ '✔' if checks.local_recording else '✕' }}</td></tr>
+    <tr><th>録音とアップロードに同意する</th><td>{{ '✔' if checks.upload_agreement else '✕' }}</td></tr>
+  </table>
+
+  <h2>署名</h2>
+  <table class="signature">
+    <tr><th>署名 (チェックログ)</th><td>上記の同意事項にチェック済み</td></tr>
+    <tr><th>記入者</th><td>{{ participant_name }}</td></tr>
+    <tr><th>記入日時</th><td>{{ timestamp }}</td></tr>
+  </table>
+
+  <div class="notes">
+    <p>※ 手書き署名が必要な場合は別紙をご使用ください。</p>
+    <p>※ この PDF は自動生成され、セッションフォルダ内の「00_consent.pdf」として保存されます。</p>
+  </div>
+</body>
+</html>

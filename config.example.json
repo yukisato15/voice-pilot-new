@@ -1,0 +1,25 @@
+{
+  "export_root": "/ExportRoot",
+  "zoom_recording_dir": "/Users/USERNAME/Documents/Zoom",
+  "upload": {
+    "provider": "s3",
+    "dest": "s3://mybucket/datasets",
+    "credentials_path": "/Users/USERNAME/.config/zoom-duo/aws-cred.json"
+  },
+  "audio": {
+    "sample_rate": 48000,
+    "beep_enabled": false,
+    "bgm_enabled": false
+  },
+  "session": {
+    "talk_seconds": 360,
+    "start_silence": 3,
+    "end_silence": 5,
+    "interval_seconds": 60,
+    "break_every_minutes": 30,
+    "break_length_minutes": 5
+  },
+  "themes": {
+    "csv_path": "./samples/themes_sample.csv"
+  }
+}

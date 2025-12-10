@@ -78,6 +78,7 @@
 
   const finishBtn = document.getElementById("finish-btn");
   const exportSummaryBtn = document.getElementById("export-summary-btn");
+  const takeExportsContainer = document.getElementById("take-exports");
   const finishModal = document.getElementById("finish-modal");
   const finishForm = document.getElementById("finish-form");
   const finishGroup = document.getElementById("finish-group");
@@ -481,6 +482,11 @@
     return String(Math.max(sessionCount || 1, 1));
   }
 
+  function getMaxTakeNumber() {
+    const finishedMax = finishedTakes.reduce((max, item) => Math.max(max, Number(item.take) || 0), 0);
+    return Math.max(finishedMax, sessionCount || 1);
+  }
+
   function extractTakeDisplay(sessionLabel, takeValue) {
     const explicit = takeValue ? String(takeValue).trim() : "";
     if (explicit) {
@@ -515,6 +521,7 @@
     skipNextStartIncrement = true;
     refreshSessionLabel(sessionCount);
     applyAppState();
+    renderTakeExports();
   }
 
   function resetTimecodeOnly() {
@@ -543,6 +550,7 @@
     broadcastTime();
     hidePauseActionBar();
     hasStarted = false;
+    renderTakeExports();
   }
 
   function getBreakDurationSeconds() {
@@ -2351,6 +2359,93 @@
     }
   }
 
+  async function exportTake(takeNumber, showAlert = true) {
+    if (!appState.groupId || !appState.session) {
+      alert("先にセッション情報を入力してください。");
+      return;
+    }
+    const takeValue = String(takeNumber);
+    try {
+      const response = await fetch("/api/export-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groupId: appState.groupId,
+          session: appState.session,
+          take: takeValue,
+          summary: "",
+          director: appState.director,
+          participants: [appState.participantA, appState.participantB],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "CSV の生成に失敗しました");
+      }
+      triggerDownload(data.filename || `export_${Date.now()}.csv`, data.content || "");
+      const existingIndex = finishedTakes.findIndex((item) => String(item.take) === takeValue);
+      const record = { take: takeValue, summary: "", exportedAt: new Date().toISOString() };
+      if (existingIndex >= 0) {
+        finishedTakes.splice(existingIndex, 1, record);
+      } else {
+        finishedTakes.push(record);
+      }
+      renderTakeExports();
+      if (showAlert) {
+        alert(`CSV をダウンロードしました (Take ${formatTakeLabel(takeValue)})`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("CSV のエクスポートに失敗しました。コンソールを確認してください。");
+    }
+  }
+
+  async function exportAllTakes() {
+    const maxTake = getMaxTakeNumber();
+    for (let take = 1; take <= maxTake; take += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await exportTake(take, false);
+    }
+    alert("まとめてCSVを出力しました。");
+  }
+
+  function renderTakeExports() {
+    if (!takeExportsContainer) {
+      return;
+    }
+    const maxTake = Math.max(getMaxTakeNumber(), 3);
+    takeExportsContainer.innerHTML = "";
+    for (let take = 1; take <= maxTake; take += 1) {
+      const takeLabel = formatTakeLabel(take);
+      const existing = finishedTakes.find((item) => String(item.take) === String(take));
+      const status = existing ? "出力済" : "未出力";
+      const badgeClass = existing
+        ? "bg-emerald-600 text-white"
+        : "bg-slate-700 text-slate-200";
+      const chip = document.createElement("div");
+      chip.className =
+        "flex items-center gap-2 rounded-xl border border-gh-border bg-gh-bg px-3 py-2 shadow-sm";
+      chip.innerHTML = `
+        <div class="flex flex-col">
+          <span class="text-xs font-semibold text-gh-text">S${String(take).padStart(2, "0")}（${take}回目）</span>
+          <span class="text-[11px] text-gh-textMuted">${status}</span>
+        </div>
+        <button
+          type="button"
+          class="rounded-lg bg-gh-blue px-3 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-gh-blueDark focus:outline-none focus:ring-2 focus:ring-gh-blue/40"
+          data-take="${take}"
+        >
+          CSV出力
+        </button>
+      `;
+      const button = chip.querySelector("button");
+      if (button) {
+        button.addEventListener("click", () => exportTake(take));
+      }
+      takeExportsContainer.appendChild(chip);
+    }
+  }
+
   function sendPrompt(message) {
     const text = (message || "").trim();
     if (!text) {
@@ -3560,6 +3655,7 @@
     resetPendingState();
     updateThemePreview();
     toggleThemePanel(false);
+    renderTakeExports();
     if (hasOffsetUi) {
       renderOffsetStatus(null);
       void fetchSessionStatus();
@@ -3571,6 +3667,7 @@
     resetBtn.addEventListener("click", handleResetButton);
     resumeBtn?.addEventListener("click", resumeAfterPause);
     earlyFinishBtn?.addEventListener("click", () => handleEarlyFinish("early_finish_button"));
+    exportSummaryBtn?.addEventListener("click", exportAllTakes);
 
     sendCustomPromptBtn.addEventListener("click", () => {
       sendPrompt(customPromptInput.value);

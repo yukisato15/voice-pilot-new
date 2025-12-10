@@ -907,6 +907,24 @@
             </div>
           </div>
 
+          <div class="rounded-2xl border border-gh-border bg-gh-canvas p-4 shadow-md">
+            <div class="flex items-center justify-between flex-wrap gap-3 mb-3">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-gh-text">CSV出力 / 収録ステータス</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  id="export-summary-btn"
+                  type="button"
+                  class="rounded-lg border border-gh-border bg-gh-bg px-4 py-2 text-xs font-bold text-gh-text shadow-sm transition hover:border-gh-blue focus:outline-none focus:ring-2 focus:ring-gh-blue/30"
+                >
+                  まとめて出力
+                </button>
+              </div>
+            </div>
+            <div id="take-exports" class="flex flex-wrap gap-2"></div>
+          </div>
+
           <div class="group relative overflow-hidden rounded-2xl border border-gh-border bg-gh-canvas p-6 shadow-xl">
             <div class="absolute -left-20 -bottom-20 h-40 w-40 rounded-full bg-gradient-to-br from-gh-blue/10 to-gh-purple/10 blur-3xl"></div>
             <div class="relative flex flex-col gap-5">

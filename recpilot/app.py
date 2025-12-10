@@ -296,9 +296,9 @@ def generate_session_csv(
         [
             "Session Summary",
             summary_text,
-            "00:00:00",
-            "00:00:00",
-            "0:00:00",
+            start_time_str,
+            "",
+            "",
             "SUMMARY",
             datetime.now(JST).strftime("%Y/%m/%d %H:%M:%S"),
             director,
@@ -327,7 +327,7 @@ def generate_session_csv(
                 comment,
                 adjusted_start,
                 adjusted_start,
-                "0:00:00",
+                "",
                 marker,
                 created_at,
                 director,
@@ -1069,28 +1069,10 @@ def api_final_export():
     if not group_id or not session_label:
         return jsonify({"error": "組とセッションを入力してください。"}), 400
 
-    uploaded_files = request.files.getlist("files")
-    if not uploaded_files:
-        return jsonify({"error": "録画ファイルが選択されていません。"}), 400
-
     timestamp_label = datetime.now().strftime("%Y%m%d_%H%M%S")
     working_dir = EXPORTS_DIR / f"{sanitize_component(group_id)}_{sanitize_component(session_label)}_{timestamp_label}"
-    source_dir = working_dir / "source"
     output_dir = working_dir / "output"
-    source_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    saved_files: List[Tuple[Path, Path]] = []
-    for storage in uploaded_files:
-        filename = storage.filename or getattr(storage, "name", None) or f"file_{len(saved_files) + 1}"
-        rel_path = Path(filename)
-        dest_path = source_dir / rel_path
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        storage.save(dest_path)
-        saved_files.append((rel_path, dest_path))
-
-    zoom_sessions = infer_zoom_sessions(saved_files)
-    zoom_sessions.sort(key=lambda item: item.get("timestamp") or datetime.min)
 
     segments_raw = metadata.get("segments") or []
     segments: List[Dict[str, object]] = []
@@ -1125,17 +1107,11 @@ def api_final_export():
     processed_segments = []
     for idx, segment in enumerate(segments):
         take_label = str(segment.get("take") or idx + 1)
-        zoom_session = zoom_sessions[idx] if idx < len(zoom_sessions) else (zoom_sessions[-1] if zoom_sessions else None)
-        zoom_start_dt = zoom_session.get("timestamp") if zoom_session else None
         rec_start_dt = segment.get("start_dt")
-        if rec_start_dt and zoom_start_dt:
-            offset_seconds = (zoom_start_dt - rec_start_dt).total_seconds()
-            offset_source = "calculated"
-        else:
-            offset_seconds = 0.0
-            offset_source = "default"
+        offset_seconds = 0.0
+        offset_source = "none"
         start_time_str = format_timestamp(rec_start_dt)
-        recording_time_str = format_timestamp(zoom_start_dt)
+        recording_time_str = ""
         summary_text = segment.get("summary") or takes_map.get(take_label, {}).get("summary", "")
         note_text = segment.get("note", "")
 
@@ -1161,17 +1137,6 @@ def api_final_export():
             note_filename = f"{sanitize_component(group_id)}_{sanitize_component(session_label)}_take{take_label}_note.txt"
             (take_dir / note_filename).write_text(note_text, encoding="utf-8")
 
-        copied_files = []
-        if zoom_session:
-            copied_files = copy_zoom_files_to_take_dir(
-                zoom_session.get("files", []),
-                take_dir,
-                zoom_start_dt,
-                group_id,
-                session_label,
-                take_label,
-            )
-
         processed_segments.append(
             {
                 "take": take_label,
@@ -1179,7 +1144,7 @@ def api_final_export():
                 "recpilotStart": start_time_str,
                 "zoomStart": recording_time_str,
                 "rows": rows_count,
-                "files": copied_files,
+                "files": [],
             }
         )
 

@@ -33,6 +33,8 @@
   const joinDate = document.getElementById("room-join-date");
   const joinDirector = document.getElementById("room-join-director");
   const joinStatus = document.getElementById("room-join-status");
+  const joinContainer = document.getElementById("room-join-container");
+  const joinReopenBtn = document.getElementById("room-join-reopen");
 
   const overlayValueBaseClass = overlayValue.className;
   const noticeBaseClass = "rounded-full bg-white/10 px-5 py-2 text-base font-semibold text-white shadow-lg backdrop-blur";
@@ -86,11 +88,22 @@
     if (payload?.roomId) {
       currentRoomId = payload.roomId;
       updateJoinStatus(`参加中: ${payload.roomId}`, true);
+      hideJoinPanel();
     }
   });
   socket.on("connect_error", (err) => {
     updateJoinStatus(`接続エラー: ${err?.message || "unknown"}`, false);
   });
+
+  function hideJoinPanel() {
+    joinContainer?.classList.add("hidden");
+    joinReopenBtn?.classList.remove("hidden");
+  }
+
+  function showJoinPanel() {
+    joinContainer?.classList.remove("hidden");
+    joinReopenBtn?.classList.add("hidden");
+  }
 
   joinForm?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -110,6 +123,10 @@
       console.warn("roomId の保存に失敗しました", err);
     }
     ensureRoomJoin();
+  });
+
+  joinReopenBtn?.addEventListener("click", () => {
+    showJoinPanel();
   });
 
   let overlayTimeoutId = null;

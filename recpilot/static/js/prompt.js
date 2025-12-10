@@ -88,6 +88,9 @@
       updateJoinStatus(`参加中: ${payload.roomId}`, true);
     }
   });
+  socket.on("connect_error", (err) => {
+    updateJoinStatus(`接続エラー: ${err?.message || "unknown"}`, false);
+  });
 
   joinForm?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -100,6 +103,7 @@
       return;
     }
     currentRoomId = roomId;
+    updateJoinStatus(`接続中... (${roomId})`, false);
     try {
       localStorage.setItem("recpilot-room-id", roomId);
     } catch (err) {

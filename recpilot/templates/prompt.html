@@ -27,35 +27,41 @@
   </head>
   <body class="relative flex min-h-screen flex-col bg-black text-white">
     <!-- Room join panel -->
-    <div class="absolute left-4 top-4 z-50 max-w-md rounded-2xl border border-white/15 bg-white/5 p-4 shadow-lg backdrop-blur">
+    <div class="absolute left-4 top-4 z-50 max-w-xl rounded-2xl border border-white/15 bg-white/5 p-4 shadow-lg backdrop-blur">
       <form id="room-join-form" class="space-y-3">
         <div class="flex items-center justify-between gap-3">
-          <p class="text-sm font-semibold text-white">接続先を指定</p>
+          <div>
+            <p class="text-sm font-semibold text-white">接続先を指定</p>
+            <p class="text-[11px] text-white/70">Control画面と同じ「組番号・セッション日（YYYYMMDD）・収録進行者名」を一字一句合わせて入力してください。</p>
+          </div>
           <span id="room-join-status" class="text-xs font-semibold text-amber-300">room未設定</span>
         </div>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input
             id="room-join-group"
             type="text"
-            placeholder="組番号 (例: 001)"
-            class="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50"
+            placeholder="組番号（例: 001）"
+            class="w-full min-w-[140px] rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50"
           />
           <input
             id="room-join-date"
             type="text"
             inputmode="numeric"
             maxlength="8"
-            placeholder="セッション日 (YYYYMMDD)"
-            class="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50"
+            placeholder="セッション日（YYYYMMDD）"
+            class="w-full min-w-[170px] rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50"
           />
           <input
             id="room-join-director"
             type="text"
-            placeholder="進行者名"
-            class="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50"
+            placeholder="収録進行者名（例: 佐藤祐貴）"
+            class="w-full min-w-[170px] rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/50 focus:border-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50"
           />
         </div>
-        <div class="flex justify-end">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-[11px] text-white/60">
+            Control と同じ「組番号・セッション日・収録進行者名」からRoomIDを生成し、そのroomにのみ接続します。
+          </p>
           <button
             type="submit"
             class="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-bold text-white shadow hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-300"
@@ -63,9 +69,6 @@
             接続
           </button>
         </div>
-        <p class="text-[11px] text-white/60">
-          Control と同じ「組番号・セッション日・収録進行者名」からRoomIDを生成し、そのroomにのみ接続します。
-        </p>
       </form>
     </div>
     <!-- 画面注目オーバーレイ (最優先) -->

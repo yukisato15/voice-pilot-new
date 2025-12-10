@@ -202,35 +202,39 @@
       id="zoom-share-modal"
       class="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 px-6 py-10 backdrop-blur-sm"
     >
-      <div class="w-full max-w-2xl space-y-6 rounded-2xl border border-gh-border bg-gh-canvas p-10 shadow-2xl ring-1 ring-black/50">
-        <header class="space-y-3 text-center">
+      <div class="w-full max-w-3xl space-y-8 rounded-2xl border border-gh-border bg-gh-canvas/95 p-10 shadow-2xl ring-1 ring-black/50">
+        <header class="space-y-4 text-center">
           <div class="flex justify-center">
-            <div class="rounded-full bg-gh-blue/20 p-4">
+            <div class="rounded-full bg-gh-blue/20 p-5">
               <svg class="h-16 w-16 text-gh-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
               </svg>
             </div>
           </div>
-          <h2 class="text-2xl font-bold text-gh-text">初めに、Zoom にてプロンプト画面を共有してください</h2>
-          <p class="text-sm text-gh-textMuted leading-relaxed">
-            参加者がプロンプト画面を見られるように、Zoom の画面共有機能でプロンプト画面を共有してください。
-          </p>
+          <div class="space-y-2">
+            <h2 class="text-3xl font-extrabold text-gh-text">これは RecPilot Control です</h2>
+            <p class="text-base text-gh-textMuted leading-relaxed">
+              まずはセッション情報を入力し、そのあと Zoom の画面共有でプロンプト画面を共有してください。
+            </p>
+          </div>
         </header>
-        <div class="rounded-xl border border-gh-border/70 bg-gh-bg/60 px-6 py-5 space-y-3">
-          <h3 class="text-sm font-bold text-gh-text">手順:</h3>
-          <ol class="space-y-2 text-sm text-gh-textMuted list-decimal list-inside">
-            <li>ブラウザで新しいタブまたはウィンドウを開く</li>
-            <li>アドレスバーに「<code class="rounded bg-gh-bg px-2 py-0.5 text-gh-blue font-mono text-xs">localhost:5000/prompt</code>」と入力してプロンプト画面を表示</li>
+
+        <div class="rounded-2xl border border-gh-border/70 bg-gh-bg/60 px-6 py-5 shadow-inner">
+          <h3 class="text-sm font-semibold text-gh-text">手順:</h3>
+          <ol class="mt-3 space-y-2 text-sm text-gh-textMuted list-decimal list-inside">
+            <li>セッション情報を入力（年月日例: <span class="font-semibold text-gh-blue underline decoration-gh-blue/60">20251205</span> ）</li>
             <li>Zoom の「画面を共有」ボタンをクリック</li>
             <li>プロンプト画面のウィンドウまたはタブを選択して共有開始</li>
           </ol>
         </div>
-        <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-6 py-4">
-          <p class="text-sm font-semibold text-amber-600">
+
+        <div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-6 py-4">
+          <p class="text-sm font-semibold text-amber-500">
             ⚠️ 参加者はこのプロンプト画面を見ながら収録を行います。必ず共有を確認してから進んでください。
           </p>
         </div>
-        <footer class="flex flex-col gap-3 pt-4">
+
+        <footer class="flex flex-col gap-3 pt-2">
           <p class="text-center text-base font-bold text-gh-text">共有済みですか？</p>
           <button
             id="zoom-share-confirm"

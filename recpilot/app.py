@@ -408,7 +408,8 @@ def copy_zoom_files_to_take_dir(
 
 class SessionOffsetManager:
     def __init__(self) -> None:
-        self._lock = threading.Lock()
+        # Reentrant lock to avoid deadlock when nested helpers are called under the same lock
+        self._lock = threading.RLock()
         self._state: Dict[str, Optional[object]] = {
             "group_id": None,
             "session_label": None,

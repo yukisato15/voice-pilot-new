@@ -126,7 +126,13 @@ def create_app() -> Flask:
 
 
 app = create_app()
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode=ASYNC_MODE)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode=ASYNC_MODE,
+    ping_interval=25,
+    ping_timeout=60,
+)
 
 
 @app.before_request

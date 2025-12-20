@@ -1,9 +1,16 @@
 (() => {
-  const socket = io({ autoConnect: false });
+  const socket = io({
+    autoConnect: false,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    timeout: 20000,
+  });
   const params = new URLSearchParams(window.location.search);
   const roomFromQuery = (params.get("room") || "").trim();
   const storedRoom = (localStorage.getItem("recpilot-room-id") || "").trim();
   let currentRoomId = roomFromQuery || storedRoom;
+  let connectionState = "disconnected"; // disconnected | reconnecting | connected
   if (roomFromQuery) {
     try {
       localStorage.setItem("recpilot-room-id", roomFromQuery);
@@ -35,6 +42,9 @@
   const joinStatus = document.getElementById("room-join-status");
   const joinContainer = document.getElementById("room-join-container");
   const joinReopenBtn = document.getElementById("room-join-reopen");
+  const statusState = document.getElementById("room-status-state");
+  const statusRoom = document.getElementById("room-status-room");
+  const statusNote = document.getElementById("room-status-note");
 
   const overlayValueBaseClass = overlayValue.className;
   const noticeBaseClass = "rounded-full bg-white/10 px-5 py-2 text-base font-semibold text-white shadow-lg backdrop-blur";
@@ -70,12 +80,34 @@
     joinStatus.className = ok ? "text-emerald-300 text-xs font-semibold" : "text-amber-300 text-xs font-semibold";
   }
 
+  function setConnectionStatus(state, roomId, note = "") {
+    connectionState = state;
+    if (statusState) {
+      const label = state === "connected" ? "接続中" : state === "reconnecting" ? "再接続中" : "未接続";
+      statusState.textContent = label;
+      statusState.className =
+        state === "connected"
+          ? "font-semibold text-emerald-300"
+          : state === "reconnecting"
+          ? "font-semibold text-amber-300"
+          : "font-semibold text-red-300";
+    }
+    if (statusRoom) {
+      statusRoom.textContent = `room: ${roomId || "-"}`;
+    }
+    if (statusNote) {
+      statusNote.textContent = note;
+    }
+  }
+
   function ensureRoomJoin() {
     if (!currentRoomId) {
       updateJoinStatus("room未設定: 組番号・セッション日・進行者名を入力してください");
+      setConnectionStatus("disconnected", "");
       return;
     }
     if (!socket.connected) {
+      setConnectionStatus("reconnecting", currentRoomId, "接続中...");
       socket.connect();
     }
     socket.emit("join_room", { roomId: currentRoomId });
@@ -88,11 +120,23 @@
     if (payload?.roomId) {
       currentRoomId = payload.roomId;
       updateJoinStatus(`参加中: ${payload.roomId}`, true);
+      setConnectionStatus("connected", payload.roomId, "");
       hideJoinPanel();
     }
   });
   socket.on("connect_error", (err) => {
     updateJoinStatus(`接続エラー: ${err?.message || "unknown"}`, false);
+    setConnectionStatus(currentRoomId ? "reconnecting" : "disconnected", currentRoomId, `接続エラー: ${err?.message || "unknown"}`);
+  });
+  socket.on("disconnect", (reason) => {
+    updateJoinStatus(`切断: 再接続待ち (${reason || "unknown"})`, false);
+    setConnectionStatus(currentRoomId ? "reconnecting" : "disconnected", currentRoomId, `切断: ${reason || "unknown"}`);
+    showJoinPanel();
+    if (currentRoomId) {
+      setTimeout(() => {
+        ensureRoomJoin();
+      }, 1000);
+    }
   });
 
   function hideJoinPanel() {
@@ -113,10 +157,12 @@
     const roomId = buildRoomId(groupId, date, director);
     if (!roomId) {
       updateJoinStatus("必須項目を入力してください", false);
+      setConnectionStatus("disconnected", "", "入力が必要です");
       return;
     }
     currentRoomId = roomId;
     updateJoinStatus(`接続中... (${roomId})`, false);
+    setConnectionStatus("reconnecting", roomId, "接続中...");
     try {
       localStorage.setItem("recpilot-room-id", roomId);
     } catch (err) {

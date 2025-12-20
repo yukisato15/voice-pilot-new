@@ -46,6 +46,10 @@
   const hintExtra1Btn = document.getElementById("hint-extra1-btn");
   const hintExtra2Btn = document.getElementById("hint-extra2-btn");
 
+  const socketStatusState = document.getElementById("socket-status-state");
+  const socketStatusRoom = document.getElementById("socket-status-room");
+  const socketStatusNote = document.getElementById("socket-status-note");
+
   const toggleTemplatePanelBtn = document.getElementById("toggle-template-panel");
   const templatePanelIndicator = document.getElementById("template-panel-indicator");
   const templatePanelIndicatorIcon = document.getElementById("template-panel-indicator-icon");
@@ -185,6 +189,9 @@
 
   const socket = io({ autoConnect: false });
   let currentRoomId = "";
+  let joinedRoomId = "";
+  let socketConnectionState = "disconnected"; // disconnected | reconnecting | connected
+  let lastStatusNote = "";
 
   const CATEGORY_GRADIENTS = [
     "from-blue-500 to-cyan-500",
@@ -508,6 +515,38 @@
     return `${group}_${date}_${director}`;
   }
 
+  function setSocketStatus(state, roomId, note = "") {
+    socketConnectionState = state;
+    if (socketStatusState) {
+      const label =
+        state === "connected" ? "接続中" : state === "reconnecting" ? "再接続中" : "未接続";
+      socketStatusState.textContent = label;
+      socketStatusState.className =
+        state === "connected"
+          ? "font-semibold text-emerald-400"
+          : state === "reconnecting"
+          ? "font-semibold text-amber-400"
+          : "font-semibold text-red-400";
+    }
+    if (socketStatusRoom) {
+      socketStatusRoom.textContent = `room: ${roomId || "-"}`;
+    }
+    if (socketStatusNote) {
+      socketStatusNote.textContent = note || "";
+    }
+    lastStatusNote = note || "";
+  }
+
+  function canSendToPrompt(actionLabel) {
+    const desiredRoomId = buildRoomIdFromState();
+    if (!desiredRoomId || socketConnectionState !== "connected" || !joinedRoomId) {
+      setSocketStatus(desiredRoomId ? "reconnecting" : "disconnected", desiredRoomId, `${actionLabel}は送信できません（未接続）`);
+      return false;
+    }
+    setSocketStatus("connected", desiredRoomId, lastStatusNote);
+    return true;
+  }
+
   function getCurrentTakeValue() {
     return String(Math.max(sessionCount || 1, 1));
   }
@@ -545,14 +584,17 @@
   function ensureSocketRoom() {
     const roomId = buildRoomIdFromState();
     if (!roomId) {
-      console.warn("roomId 未設定のためソケット送信をスキップします");
+      setSocketStatus("disconnected", "", "room未設定");
       return null;
     }
     if (!socket.connected) {
+      setSocketStatus("reconnecting", roomId, "再接続中");
       socket.connect();
     }
     if (currentRoomId !== roomId) {
       currentRoomId = roomId;
+      joinedRoomId = "";
+      setSocketStatus("reconnecting", roomId, "接続中...");
       try {
         localStorage.setItem("recpilot-room-id", roomId);
       } catch (err) {
@@ -566,6 +608,9 @@
   function emitToRoom(eventName, payload = {}) {
     const roomId = ensureSocketRoom();
     if (!roomId) return;
+    if (socketConnectionState !== "connected" || joinedRoomId !== roomId) {
+      return;
+    }
     socket.emit(eventName, { ...payload, roomId });
   }
 
@@ -574,7 +619,23 @@
     if (roomId) {
       currentRoomId = roomId;
       socket.emit("join_room", { roomId });
+      setSocketStatus("reconnecting", roomId, "接続中...");
     }
+  });
+  socket.on("room_joined", (payload) => {
+    const roomId = payload?.roomId || currentRoomId;
+    if (roomId) {
+      joinedRoomId = roomId;
+      setSocketStatus("connected", roomId, "");
+    }
+  });
+  socket.on("disconnect", (reason) => {
+    const roomId = buildRoomIdFromState() || currentRoomId;
+    setSocketStatus(roomId ? "reconnecting" : "disconnected", roomId, `切断: ${reason || "unknown"}`);
+  });
+  socket.on("connect_error", (err) => {
+    const roomId = buildRoomIdFromState() || currentRoomId;
+    setSocketStatus(roomId ? "reconnecting" : "disconnected", roomId, `接続エラー: ${err?.message || "unknown"}`);
   });
 
   function refreshSessionLabel(takeNumber) {
@@ -2120,6 +2181,9 @@
     if (!socket) {
       return;
     }
+    if (!canSendToPrompt("テーマ")) {
+      return;
+    }
     const theme = getTheme(currentThemeId);
     emitToRoom("theme_update", {
       title: theme?.title || "",
@@ -2631,11 +2695,15 @@
   function sendPrompt(message) {
     const text = (message || "").trim();
     if (!text) {
-      return;
+      return false;
+    }
+    if (!canSendToPrompt("カンペ")) {
+      return false;
     }
     emitToRoom("send_prompt", { message: text });
     lastPromptLabel.textContent = text;
     lastPromptMessage = text;
+    return true;
   }
 
   function getCannedMessages() {
@@ -3549,10 +3617,12 @@
       message = `${names.join("さん、")}さん、${prompt}`;
     }
 
-    sendPrompt(message);
-    // Show colored notice to indicate pattern message
-    emitOverlay({ mode: "notice", message: `💬 ${message}`, level: "info", ttlMs: 4000 });
-    closeTemplatePopover();
+    const sent = sendPrompt(message);
+    if (sent) {
+      // Show colored notice to indicate pattern message
+      emitOverlay({ mode: "notice", message: `💬 ${message}`, level: "info", ttlMs: 4000 });
+      closeTemplatePopover();
+    }
   }
 
   // パターン別メッセージポップオーバーを閉じる
@@ -3959,6 +4029,8 @@
     updateTimerDisplay();
     buildPromptButtons();
     updateCategorySelect();
+    const initialRoomId = buildRoomIdFromState();
+    setSocketStatus(initialRoomId ? "reconnecting" : "disconnected", initialRoomId, initialRoomId ? "接続待ち" : "room未設定");
     if (typeof config.totalThemes === "number") {
       const initialCount = Math.max(0, Number(config.totalThemes) || 0);
       if (themeTotalLabel) {
@@ -4016,12 +4088,18 @@
       }
     });
     clearPromptBtn.addEventListener("click", () => {
+      if (!canSendToPrompt("カンペ")) {
+        return;
+      }
       emitToRoom("clear_prompt", {});
       lastPromptLabel.textContent = "未送信";
       lastPromptMessage = "";
     });
 
     screenAttentionBtn.addEventListener("click", () => {
+      if (!canSendToPrompt("画面注目")) {
+        return;
+      }
       emitToRoom("screen_attention", {});
     });
 
@@ -4319,6 +4397,9 @@
         const emoji = btn.dataset.reaction;
         const label = btn.dataset.label;
         if (emoji && label && socket) {
+          if (!canSendToPrompt("リアクション")) {
+            return;
+          }
           emitToRoom("send_reaction", { emoji, label });
           // 視覚的フィードバック
           btn.style.transform = "scale(0.9)";

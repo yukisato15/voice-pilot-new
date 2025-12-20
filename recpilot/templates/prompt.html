@@ -78,6 +78,16 @@
     >
       接続先を変更
     </button>
+    <div
+      id="room-status-bar"
+      class="fixed right-4 top-14 z-40 rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-[11px] text-white/80 shadow-lg backdrop-blur"
+    >
+      <div class="flex items-center gap-2">
+        <span id="room-status-state" class="font-semibold text-red-300">未接続</span>
+        <span id="room-status-room" class="text-white/60">room: -</span>
+      </div>
+      <div id="room-status-note" class="mt-1 text-[10px] text-amber-300"></div>
+    </div>
     <!-- 画面注目オーバーレイ (最優先) -->
     <div
       id="screen-attention-overlay"

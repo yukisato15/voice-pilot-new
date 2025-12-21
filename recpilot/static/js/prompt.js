@@ -6,14 +6,20 @@
     reconnectionDelay: 1000,
     timeout: 20000,
   });
+  const CONTROL_ROOM_KEY = "recpilot-control-room-id";
+  const PROMPT_ROOM_KEY = "recpilot-prompt-room-id";
+  const LEGACY_ROOM_KEY = "recpilot-room-id";
   const params = new URLSearchParams(window.location.search);
   const roomFromQuery = (params.get("room") || "").trim();
-  const storedRoom = (localStorage.getItem("recpilot-room-id") || "").trim();
-  let currentRoomId = roomFromQuery || storedRoom;
+  const storedPromptRoom = (localStorage.getItem(PROMPT_ROOM_KEY) || "").trim();
+  const storedControlRoom = (localStorage.getItem(CONTROL_ROOM_KEY) || "").trim();
+  const legacyRoom = (localStorage.getItem(LEGACY_ROOM_KEY) || "").trim();
+  let currentRoomId = roomFromQuery || storedPromptRoom || storedControlRoom || legacyRoom;
   let connectionState = "disconnected"; // disconnected | reconnecting | connected
+  let requestedRoomId = "";
   if (roomFromQuery) {
     try {
-      localStorage.setItem("recpilot-room-id", roomFromQuery);
+      localStorage.setItem(PROMPT_ROOM_KEY, roomFromQuery);
     } catch (err) {
       console.warn("roomId の保存に失敗しました", err);
     }
@@ -44,6 +50,7 @@
   const joinReopenBtn = document.getElementById("room-join-reopen");
   const statusState = document.getElementById("room-status-state");
   const statusRoom = document.getElementById("room-status-room");
+  const statusPeer = document.getElementById("room-status-peer");
   const statusNote = document.getElementById("room-status-note");
 
   const overlayValueBaseClass = overlayValue.className;
@@ -95,6 +102,17 @@
     if (statusRoom) {
       statusRoom.textContent = `room: ${roomId || "-"}`;
     }
+    if (statusPeer) {
+      const controlRoom = localStorage.getItem(CONTROL_ROOM_KEY) || "";
+      if (controlRoom) {
+        const mismatch = roomId && controlRoom !== roomId;
+        statusPeer.textContent = mismatch ? `Control room: ${controlRoom}（不一致）` : `Control room: ${controlRoom}`;
+        statusPeer.className = mismatch ? "mt-1 text-[10px] text-amber-300 font-semibold" : "mt-1 text-[10px] text-white/60";
+      } else {
+        statusPeer.textContent = "";
+        statusPeer.className = "mt-1 text-[10px] text-white/60";
+      }
+    }
     if (statusNote) {
       statusNote.textContent = note;
     }
@@ -118,9 +136,20 @@
   ensureRoomJoin();
   socket.on("room_joined", (payload) => {
     if (payload?.roomId) {
+      if (requestedRoomId && payload.roomId !== requestedRoomId) {
+        setConnectionStatus("disconnected", payload.roomId, "入力と一致しません");
+        updateJoinStatus("入力と一致しません。再入力してください。", false);
+        showJoinPanel();
+        return;
+      }
       currentRoomId = payload.roomId;
       updateJoinStatus(`参加中: ${payload.roomId}`, true);
       setConnectionStatus("connected", payload.roomId, "");
+      try {
+        localStorage.setItem(PROMPT_ROOM_KEY, payload.roomId);
+      } catch (err) {
+        console.warn("roomId の保存に失敗しました", err);
+      }
       hideJoinPanel();
     }
   });
@@ -160,15 +189,25 @@
       setConnectionStatus("disconnected", "", "入力が必要です");
       return;
     }
+    requestedRoomId = roomId;
     currentRoomId = roomId;
     updateJoinStatus(`接続中... (${roomId})`, false);
     setConnectionStatus("reconnecting", roomId, "接続中...");
     try {
-      localStorage.setItem("recpilot-room-id", roomId);
+      localStorage.setItem(PROMPT_ROOM_KEY, roomId);
     } catch (err) {
       console.warn("roomId の保存に失敗しました", err);
     }
+    if (socket.connected) {
+      socket.disconnect();
+    }
     ensureRoomJoin();
+  });
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === CONTROL_ROOM_KEY) {
+      setConnectionStatus(connectionState, currentRoomId, statusNote?.textContent || "");
+    }
   });
 
   joinReopenBtn?.addEventListener("click", () => {

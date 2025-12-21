@@ -48,6 +48,7 @@
 
   const socketStatusState = document.getElementById("socket-status-state");
   const socketStatusRoom = document.getElementById("socket-status-room");
+  const socketStatusPeer = document.getElementById("socket-status-peer");
   const socketStatusNote = document.getElementById("socket-status-note");
 
   const toggleTemplatePanelBtn = document.getElementById("toggle-template-panel");
@@ -188,6 +189,8 @@
   const resetAttentionSettingsBtn = document.getElementById("reset-attention-settings-btn");
 
   const socket = io({ autoConnect: false });
+  const CONTROL_ROOM_KEY = "recpilot-control-room-id";
+  const PROMPT_ROOM_KEY = "recpilot-prompt-room-id";
   let currentRoomId = "";
   let joinedRoomId = "";
   let socketConnectionState = "disconnected"; // disconnected | reconnecting | connected
@@ -531,6 +534,17 @@
     if (socketStatusRoom) {
       socketStatusRoom.textContent = `room: ${roomId || "-"}`;
     }
+    if (socketStatusPeer) {
+      const promptRoom = localStorage.getItem(PROMPT_ROOM_KEY) || "";
+      if (promptRoom) {
+        const mismatch = roomId && promptRoom !== roomId;
+        socketStatusPeer.textContent = mismatch ? `Prompt room: ${promptRoom}（不一致）` : `Prompt room: ${promptRoom}`;
+        socketStatusPeer.className = mismatch ? "text-amber-300 font-semibold" : "text-gh-textMuted";
+      } else {
+        socketStatusPeer.textContent = "";
+        socketStatusPeer.className = "text-gh-textMuted";
+      }
+    }
     if (socketStatusNote) {
       socketStatusNote.textContent = note || "";
     }
@@ -543,7 +557,12 @@
       setSocketStatus(desiredRoomId ? "reconnecting" : "disconnected", desiredRoomId, `${actionLabel}は送信できません（未接続）`);
       return false;
     }
-    setSocketStatus("connected", desiredRoomId, lastStatusNote);
+    const promptRoom = localStorage.getItem(PROMPT_ROOM_KEY) || "";
+    if (promptRoom && promptRoom !== desiredRoomId) {
+      setSocketStatus("connected", desiredRoomId, `注意: Prompt room が ${promptRoom} です`);
+    } else {
+      setSocketStatus("connected", desiredRoomId, lastStatusNote);
+    }
     return true;
   }
 
@@ -596,7 +615,7 @@
       joinedRoomId = "";
       setSocketStatus("reconnecting", roomId, "接続中...");
       try {
-        localStorage.setItem("recpilot-room-id", roomId);
+        localStorage.setItem(CONTROL_ROOM_KEY, roomId);
       } catch (err) {
         console.warn("roomId の保存に失敗しました", err);
       }
@@ -626,6 +645,11 @@
     const roomId = payload?.roomId || currentRoomId;
     if (roomId) {
       joinedRoomId = roomId;
+      try {
+        localStorage.setItem(CONTROL_ROOM_KEY, roomId);
+      } catch (err) {
+        console.warn("roomId の保存に失敗しました", err);
+      }
       setSocketStatus("connected", roomId, "");
     }
   });
@@ -636,6 +660,13 @@
   socket.on("connect_error", (err) => {
     const roomId = buildRoomIdFromState() || currentRoomId;
     setSocketStatus(roomId ? "reconnecting" : "disconnected", roomId, `接続エラー: ${err?.message || "unknown"}`);
+  });
+
+  window.addEventListener("storage", (event) => {
+    if (event.key === PROMPT_ROOM_KEY) {
+      const roomId = buildRoomIdFromState() || currentRoomId || joinedRoomId;
+      setSocketStatus(socketConnectionState, roomId, lastStatusNote);
+    }
   });
 
   function refreshSessionLabel(takeNumber) {

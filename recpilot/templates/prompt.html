@@ -71,22 +71,25 @@
         </div>
       </form>
     </div>
-    <button
-      id="room-join-reopen"
-      class="hidden fixed right-4 top-4 z-40 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-      type="button"
-    >
-      接続先を変更
-    </button>
-    <div
-      id="room-status-bar"
-      class="fixed right-4 top-14 z-40 rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-[11px] text-white/80 shadow-lg backdrop-blur"
-    >
-      <div class="flex items-center gap-2">
-        <span id="room-status-state" class="font-semibold text-red-300">未接続</span>
-        <span id="room-status-room" class="text-white/60">room: -</span>
+    <div class="fixed right-4 top-4 z-40 flex flex-wrap items-start justify-end gap-2 max-w-[min(90vw,520px)]">
+      <div
+        id="room-status-bar"
+        class="rounded-lg border border-white/15 bg-black/60 px-3 py-2 text-[11px] text-white/80 shadow-lg backdrop-blur max-w-[min(90vw,360px)]"
+      >
+        <div class="flex items-center gap-2">
+          <span id="room-status-state" class="font-semibold text-red-300">未接続</span>
+          <span id="room-status-room" class="text-white/60">room: -</span>
+        </div>
+        <div id="room-status-peer" class="mt-1 text-[10px] text-white/60"></div>
+        <div id="room-status-note" class="mt-1 text-[10px] text-amber-300"></div>
       </div>
-      <div id="room-status-note" class="mt-1 text-[10px] text-amber-300"></div>
+      <button
+        id="room-join-reopen"
+        class="hidden rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        type="button"
+      >
+        接続先を変更
+      </button>
     </div>
     <!-- 画面注目オーバーレイ (最優先) -->
     <div

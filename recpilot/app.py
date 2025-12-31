@@ -996,15 +996,21 @@ def api_export_session():
     data = request.get_json(silent=True) or {}
     group_id = (data.get("groupId") or "").strip()
     session_label = (data.get("session") or "").strip()
-    take_label = str(data.get("take") or "1").strip()
+    take_label_raw = str(data.get("take") or "1").strip()
+    if take_label_raw.lower().startswith("s"):
+        take_label_raw = take_label_raw[1:]
+    if not take_label_raw.isdigit():
+        return jsonify({"error": "収録回数は 1〜99 を指定してください。"}), 400
+    take_num = int(take_label_raw)
+    if not (1 <= take_num <= 99):
+        return jsonify({"error": "収録回数は 1〜99 を指定してください。"}), 400
+    take_label = str(take_num)
     summary = (data.get("summary") or "").strip()
     director = (data.get("director") or "").strip()
     participants = data.get("participants") or []
 
     if not group_id or not session_label:
         return jsonify({"error": "組とセッションを指定してください。"}), 400
-    if take_label not in {"1", "2", "3"}:
-        return jsonify({"error": "収録回数は 1 / 2 / 3 を指定してください。"}), 400
 
     session_status = session_manager.get_status()
     start_time_dt = session_manager.get_start_time()
